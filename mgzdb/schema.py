@@ -164,3 +164,4 @@ class Map(BASE):
     __tablename__ = 'maps'
     id = Column(Integer, primary_key=True)
     name = Column(String, unique=True, nullable=False)
+    uuid = Column(String, unique=True)

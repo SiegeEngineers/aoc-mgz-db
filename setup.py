@@ -14,6 +14,7 @@ setup(
         'coloredlogs>=10.0',
         'iso8601>=0.1.12',
         'mgz>=1.1.5',
+        'requests>=2.20.1',
         'scp>=0.13.0',
         'SQLAlchemy>=1.2.14',
         'voobly>=1.2.3'

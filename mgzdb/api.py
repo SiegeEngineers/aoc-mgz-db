@@ -10,6 +10,7 @@ from datetime import timedelta
 
 import iso8601
 import pkg_resources
+import requests
 from paramiko import SSHClient
 from sqlalchemy.orm.exc import NoResultFound
 
@@ -36,6 +37,7 @@ QUERY_SERIES = 'series'
 QUERY_SUMMARY = 'summary'
 LOG_ID_LENGTH = 8
 COMPRESSED_EXT = '.xz'
+MAP_URL = 'https://aoe2map.net/api/rms/file'
 
 
 class API:
@@ -50,6 +52,7 @@ class API:
         self.store_host = store_host
         self.store_path = store_path
         self.session = get_session(db_path)
+        self.http = requests.session()
         self.voobly = voobly.get_session(
             key=voobly_key,
             username=voobly_username,
@@ -202,6 +205,7 @@ class API:
         duration = summary.get_duration()
         ladder = summary.get_ladder()
         map_name, map_size = summary.get_map()
+        map_uuid = None
         completed = postgame.complete if postgame else False
         restored, _ = summary.get_restored()
         postgame = postgame is not None
@@ -224,6 +228,10 @@ class API:
                 return False
             LOGGER.warning("[m:%s] adding it anyway", log_id)
 
+        resp = self.http.get('{}/{}.rms'.format(MAP_URL, map_name)).json()
+        if len(resp['maps']) > 0:
+            map_uuid = resp['maps'][0]['uuid']
+
         match = self._get_unique(
             Match, ['hash', 'voobly_id'],
             voobly_id=voobly_id,
@@ -239,7 +247,7 @@ class API:
             mod_version=mod_version,
             mod=self._get_unique(Mod, name=mod_name),
             voobly_ladder=self._get_unique(VooblyLadder, name=ladder),
-            map=self._get_unique(Map, name=map_name),
+            map=self._get_unique(Map, name=map_name, uuid=map_uuid),
             map_size=map_size,
             duration=timedelta(milliseconds=duration),
             completed=completed,
