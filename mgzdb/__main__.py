@@ -12,6 +12,7 @@ CMD_QUERY = 'query'
 CMD_ADD = 'add'
 CMD_REMOVE = 'remove'
 CMD_TAG = 'tag'
+CMD_GET = 'get'
 SUBCMD_FILE = 'file'
 SUBCMD_MATCH = 'match'
 SUBCMD_CSV = 'csv'
@@ -25,8 +26,7 @@ def main(args):
     """Handle arguments."""
     db_api = API(
         args.database, args.store_host, args.store_path,
-        args.voobly_key, args.voobly_username, args.voobly_password,
-        rename=not args.no_rename
+        args.voobly_key, args.voobly_username, args.voobly_password
     )
 
     # Add
@@ -67,6 +67,17 @@ def main(args):
     # Query
     elif args.cmd == CMD_QUERY:
         print(yaml.dump(db_api.query(args.subcmd, **vars(args)), default_flow_style=False))
+
+    # Get
+    elif args.cmd == CMD_GET:
+        filename, data = db_api.get(args.file)
+        output_filename = args.output_path or filename
+        if os.path.exists(output_filename):
+            print('file already exists:', output_filename)
+            return
+        with open(output_filename, 'wb') as handle:
+            handle.write(data)
+        print(output_filename)
 
 
 def setup():
@@ -118,7 +129,6 @@ def setup():
     add = subparsers.add_parser(CMD_ADD)
     add.add_argument('-f', '--force', action='store_true', default=False)
     add.add_argument('-t', '--tags', nargs='+')
-    add.add_argument('-n', '--no-rename', default=False, action='store_true')
 
     # "add" subcommands
     add_subparsers = add.add_subparsers(dest='subcmd')
@@ -159,6 +169,11 @@ def setup():
     tag = subparsers.add_parser(CMD_TAG)
     tag.add_argument('match')
     tag.add_argument('tags', nargs='+')
+
+    # "get" command
+    get = subparsers.add_parser(CMD_GET)
+    get.add_argument('file')
+    get.add_argument('-o', '--output-path')
 
     args = parser.parse_args()
     main(args)

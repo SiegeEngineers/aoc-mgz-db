@@ -3,6 +3,7 @@ import csv
 import hashlib
 import io
 import logging
+import lzma
 import os
 import zipfile
 from datetime import timedelta
@@ -20,7 +21,7 @@ from mgzdb.schema import (
     get_session, Tournament, Series, Match, VooblyUser, Tag,
     File, Source, Mod, VooblyLadder, Player, Civilization, Map, VooblyClan
 )
-from mgzdb.util import MGZ_EXT, copy_file, parse_filename_timestamp
+from mgzdb.util import copy_file, fetch_file, parse_filename_timestamp
 from mgzdb import queries
 
 
@@ -34,12 +35,13 @@ QUERY_FILE = 'file'
 QUERY_SERIES = 'series'
 QUERY_SUMMARY = 'summary'
 LOG_ID_LENGTH = 8
+COMPRESSED_EXT = '.xz'
 
 
 class API:
     """MGZ Database API."""
 
-    def __init__(self, db_path, store_host, store_path, voobly_key, voobly_username, voobly_password, rename=True):
+    def __init__(self, db_path, store_host, store_path, voobly_key, voobly_username, voobly_password):
         """Initialize sessions."""
         ssh = SSHClient()
         ssh.load_system_host_keys()
@@ -47,7 +49,6 @@ class API:
         self.store = ssh
         self.store_host = store_host
         self.store_path = store_path
-        self.rename = rename
         self.session = get_session(db_path)
         self.voobly = voobly.get_session(
             key=voobly_key,
@@ -140,8 +141,7 @@ class API:
             LOGGER.error("%s is not a file", rec_path)
             return False
 
-        store_filename = os.path.basename(rec_path)
-        original_filename = store_filename
+        original_filename = os.path.basename(rec_path)
 
         with open(rec_path, 'rb') as handle:
             data = handle.read()
@@ -154,10 +154,6 @@ class API:
             LOGGER.warning("[f:%s] file already exists", log_id)
             return False
 
-        if self.rename:
-            store_filename = '{}{}'.format(file_hash, MGZ_EXT)
-            LOGGER.info("[f:%s] tracking %s as %s", log_id, os.path.basename(rec_path), store_filename)
-
         try:
             handle = io.BytesIO(data)
             summary = mgz.summary.Summary(handle, len(data))
@@ -165,9 +161,11 @@ class API:
             LOGGER.error("[f:%s] invalid mgz file", log_id)
             return False
 
-        new_path = os.path.join(self.store_path, store_filename)
+        compressed_filename = '{}{}'.format(file_hash, COMPRESSED_EXT)
+        LOGGER.info("[f:%s] compressing %s as %s", log_id, os.path.basename(rec_path), compressed_filename)
+        new_path = os.path.join(self.store_path, compressed_filename)
         LOGGER.info("[f:%s] copying to %s:%s", log_id, self.store_host, new_path)
-        copy_file(handle, self.store, new_path)
+        copy_file(io.BytesIO(lzma.compress(data)), self.store, new_path)
 
         match_hash = summary.get_hash()
         try:
@@ -184,7 +182,7 @@ class API:
         self._update_match_user(match.id, user_data)
 
         new_file = File(
-            filename=store_filename,
+            filename=compressed_filename,
             original_filename=original_filename,
             hash=file_hash,
             size=summary.size,
@@ -286,6 +284,12 @@ class API:
         """Tag a match."""
         match = self.session.query(Match).get(match_id)
         self._add_tags(match, tags)
+
+    def get(self, file_id):
+        """Get a file from the store."""
+        mgz_file = self.session.query(File).get(file_id)
+        store_path = os.path.join(self.store_path, mgz_file.filename)
+        return mgz_file.original_filename, lzma.decompress(fetch_file(self.store, store_path))
 
     def query(self, query_type, **kwargs):
         """Query database."""

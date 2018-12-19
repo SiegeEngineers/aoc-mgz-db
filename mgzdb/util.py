@@ -1,4 +1,5 @@
 """Utilities."""
+import tempfile
 from datetime import datetime
 from scp import SCPClient
 
@@ -10,6 +11,16 @@ def copy_file(handle, ssh, path):
     handle.seek(0)
     with SCPClient(ssh.get_transport()) as scp:
         scp.putfo(handle, path)
+
+
+def fetch_file(ssh, path):
+    """Fetch file from destination store."""
+    with tempfile.NamedTemporaryFile() as fp:
+        with SCPClient(ssh.get_transport()) as scp:
+            scp.get(path, local_path=fp.name)
+        fp.flush()
+        with open(fp.name, 'rb') as rd:
+            return rd.read()
 
 
 def parse_filename_timestamp(func):
