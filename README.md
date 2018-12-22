@@ -43,9 +43,11 @@ Optional:
 ```bash
 mgzdb add file rec.20181026-164339.mgz
 mgzdb add match https://www.voobly.com/match/view/18916420
-mgzdb add series "NAC2Q1 GrandFinal F1Re vs BacT.zip" "Q1 Grand Final" --tournament NAC2
+mgzdb add series "135406198-NAC2Q1 GrandFinal F1Re vs BacT.zip"
 mgzdb add csv matchDump.csv
 ```
+
+When adding a series, the filename is used as the series name. Optionally prepend the name with a Challonge match ID.
 
 ## Querying
 
