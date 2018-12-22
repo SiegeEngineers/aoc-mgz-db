@@ -5,6 +5,7 @@ import io
 import logging
 import lzma
 import os
+import tempfile
 import zipfile
 from datetime import timedelta
 
@@ -19,8 +20,8 @@ import mgz.summary
 import voobly
 
 from mgzdb.schema import (
-    get_session, Tournament, Series, Match, VooblyUser, Tag,
-    File, Source, Mod, VooblyLadder, Player, Civilization, Map, VooblyClan
+    get_session, Match, VooblyUser, Tag, Series, File, Source,
+    Mod, VooblyLadder, Player, Civilization, Map, VooblyClan
 )
 from mgzdb.util import copy_file, fetch_file, parse_filename_timestamp
 from mgzdb import queries
@@ -75,31 +76,32 @@ class API:
                 SOURCE_VOOBLY,
                 voobly_url,
                 tags,
-                None,
-                None,
                 voobly_id=voobly_id,
                 played=match['timestamp'],
                 force=force,
                 user_data=player
             )
 
-    def add_series(self, zip_path, extract_path, tags, series, tournament, force=False):
+    def add_series(self, zip_path, tags, series=None, challonge_id=None, force=False):
         """Add a series via zip file."""
-        with zipfile.ZipFile(zip_path) as series_zip:
-            LOGGER.info("[%s] opened archive", os.path.basename(zip_path))
-            series_zip.extractall(extract_path)
-            for filename in series_zip.namelist():
-                LOGGER.info("[%s] processing member file %s", os.path.basename(zip_path), filename)
-                self.add_file(
-                    os.path.join(extract_path, filename),
-                    SOURCE_ZIP,
-                    os.path.basename(zip_path),
-                    tags,
-                    series,
-                    tournament,
-                    force=force
-                )
-            LOGGER.info("[%s] finished", os.path.basename(zip_path))
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with zipfile.ZipFile(zip_path) as series_zip:
+                LOGGER.info("[%s] opened archive", os.path.basename(zip_path))
+                series_zip.extractall(temp_dir)
+                for filename in series_zip.namelist():
+                    if filename.endswith('/'):
+                        continue
+                    LOGGER.info("[%s] processing member file %s", os.path.basename(zip_path), filename)
+                    self.add_file(
+                        os.path.join(temp_dir, filename),
+                        SOURCE_ZIP,
+                        os.path.basename(zip_path),
+                        tags,
+                        series,
+                        challonge_id,
+                        force=force
+                    )
+                LOGGER.info("[%s] finished", os.path.basename(zip_path))
 
     def add_csv(self, csv_path, download_path, tags, force=False):
         """Add matches from CSV."""
@@ -118,8 +120,6 @@ class API:
                     SOURCE_CSV,
                     os.path.basename(csv_path),
                     tags,
-                    None,
-                    None,
                     voobly_id=row['MatchId'],
                     played=iso8601.parse_date(row['MatchDate']),
                     force=force,
@@ -135,7 +135,7 @@ class API:
             LOGGER.info("[%s] finished parse", os.path.basename(csv_path))
 
     def add_file(
-            self, rec_path, source, reference, tags, series, tournament,
+            self, rec_path, source, reference, tags, series=None, challonge_id=None,
             voobly_id=None, played=None, force=False, user_data=None
     ):
         """Add a single mgz file."""
@@ -178,7 +178,7 @@ class API:
             LOGGER.info("[f:%s] adding match", log_id)
             if not played:
                 played = parse_filename_timestamp(original_filename)
-            match = self._add_match(summary, played, series, tournament, tags, voobly_id, force, match_hash)
+            match = self._add_match(summary, played, tags, match_hash, series, challonge_id, voobly_id, force)
             if not match:
                 return False
 
@@ -200,7 +200,7 @@ class API:
         LOGGER.info("[f:%s] add finished, file id: %d, match id: %d", log_id, new_file.id, match.id)
         return True
 
-    def _add_match(self, summary, played, series, tournament, tags, voobly_id, force, match_hash):
+    def _add_match(self, summary, played, tags, match_hash, series=None, challonge_id=None, voobly_id=None, force=False):
         postgame = summary.get_postgame()
         duration = summary.get_duration()
         ladder = summary.get_ladder()
@@ -237,11 +237,7 @@ class API:
             voobly_id=voobly_id,
             played=played,
             hash=match_hash,
-            series=self._get_unique(
-                Series,
-                name=series,
-                tournament=self._get_unique(Tournament, name=tournament)
-            ),
+            series=self._get_unique(Series, name=series, challonge_id=challonge_id),
             version=major_version,
             minor_version=minor_version,
             mod_version=mod_version,

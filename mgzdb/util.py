@@ -1,9 +1,14 @@
 """Utilities."""
+import os
 import tempfile
+import re
 from datetime import datetime
 from scp import SCPClient
 
+
 MGZ_EXT = '.mgz'
+ZIP_EXT = '.zip'
+CHALLONGE_ID_LENGTH = 9
 
 
 def copy_file(handle, ssh, path):
@@ -21,6 +26,19 @@ def fetch_file(ssh, path):
         fp.flush()
         with open(fp.name, 'rb') as rd:
             return rd.read()
+
+
+def parse_series_path(path):
+    """Parse series name and challonge ID from path."""
+    filename = os.path.basename(path)
+    start = 0
+    challonge_id = None
+    pattern = re.compile('[0-9]{' + str(CHALLONGE_ID_LENGTH) + '}')
+    if pattern.match(filename):
+        challonge_id = int(filename[:CHALLONGE_ID_LENGTH])
+        start = CHALLONGE_ID_LENGTH + 1
+    series = filename[start:].replace(ZIP_EXT, '')
+    return series, challonge_id
 
 
 def parse_filename_timestamp(func):

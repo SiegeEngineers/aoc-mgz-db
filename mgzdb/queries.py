@@ -1,7 +1,10 @@
 """MGZ database queries."""
 import logging
 from sqlalchemy import func
-from mgzdb.schema import File, Match, Series, Tournament, VooblyLadder, Source, Tag, Mod, Civilization, Map, VooblyUser
+from mgzdb.schema import (
+    File, Match, Series, VooblyLadder, Source, Tag,
+    Mod, Civilization, Map, VooblyUser
+)
 
 
 LOGGER = logging.getLogger(__name__)
@@ -64,6 +67,8 @@ def get_series(session, series_id):
         return None
     return {
         'series_id': series_id,
+        'challonge_id': series.challonge_id,
+        'name': series.name,
         'matches': [{
             'match_id': match.id,
             'files': [{

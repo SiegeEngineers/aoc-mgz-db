@@ -1,11 +1,12 @@
 """CLI for MGZ database."""
 import argparse
+import json
 import logging
 import os
 
 import coloredlogs
-import yaml
 from mgzdb.api import API
+from mgzdb.util import parse_series_path
 
 
 CMD_QUERY = 'query'
@@ -35,10 +36,7 @@ def main(args):
         # File
         if args.subcmd == SUBCMD_FILE:
             for rec in args.rec_path:
-                db_api.add_file(
-                    rec, args.source, None, args.tags, args.series, args.tournament,
-                    force=args.force
-                )
+                db_api.add_file(rec, args.source, None, args.tags, force=args.force)
 
         # Match
         elif args.subcmd == SUBCMD_MATCH:
@@ -47,10 +45,11 @@ def main(args):
 
         # Series
         elif args.subcmd == SUBCMD_SERIES:
-            db_api.add_series(
-                args.zip_path, args.extract_path, args.tags, args.series,
-                args.tournament, force=args.force
-            )
+            for path in args.zip_path:
+                series, challonge_id = parse_series_path(path)
+                db_api.add_series(
+                    path, args.tags, series, challonge_id, force=args.force
+                )
 
         # CSV
         elif args.subcmd == SUBCMD_CSV:
@@ -66,7 +65,7 @@ def main(args):
 
     # Query
     elif args.cmd == CMD_QUERY:
-        print(yaml.dump(db_api.query(args.subcmd, **vars(args)), default_flow_style=False))
+        print(json.dumps(db_api.query(args.subcmd, **vars(args)), indent=2))
 
     # Get
     elif args.cmd == CMD_GET:
@@ -148,10 +147,7 @@ def setup():
 
     # "add series"
     add_series = add_subparsers.add_parser(SUBCMD_SERIES)
-    add_series.add_argument('zip_path')
-    add_series.add_argument('series')
-    add_series.add_argument('-ep', '--extract-path', default=default_file_path)
-    add_series.add_argument('--tournament')
+    add_series.add_argument('zip_path', nargs='+')
 
     # "add csv"
     add_csv = add_subparsers.add_parser(SUBCMD_CSV)

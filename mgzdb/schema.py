@@ -127,22 +127,13 @@ class Tag(BASE):
     match = relationship('Match', foreign_keys=match_id)
 
 
-class Tournament(BASE):
-    """Represents Tournament."""
-    __tablename__ = 'tournaments'
-    id = Column(Integer, primary_key=True)
-    name = Column(String, nullable=False)
-
-
 class Series(BASE):
     """Represents Series."""
     __tablename__ = 'series'
     id = Column(Integer, primary_key=True)
-    tournament_id = Column(Integer, ForeignKey('tournaments.id'))
-    tournament = relationship('Tournament', foreign_keys=tournament_id)
-    name = Column(String, nullable=False)
+    name = Column(String)
+    challonge_id = Column(Integer)
     matches = relationship('Match', foreign_keys='Match.series_id', cascade='all, delete-orphan')
-    __table_args__ = (UniqueConstraint('tournament_id', 'name', name='unique_series'),)
 
 
 class VooblyLadder(BASE):
