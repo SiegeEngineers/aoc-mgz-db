@@ -20,12 +20,12 @@ def copy_file(handle, ssh, path):
 
 def fetch_file(ssh, path):
     """Fetch file from destination store."""
-    with tempfile.NamedTemporaryFile() as fp:
+    with tempfile.NamedTemporaryFile() as temp:
         with SCPClient(ssh.get_transport()) as scp:
-            scp.get(path, local_path=fp.name)
-        fp.flush()
-        with open(fp.name, 'rb') as rd:
-            return rd.read()
+            scp.get(path, local_path=temp.name)
+        temp.flush()
+        with open(temp.name, 'rb') as handle:
+            return handle.read()
 
 
 def parse_series_path(path):

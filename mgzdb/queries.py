@@ -1,9 +1,10 @@
 """MGZ database queries."""
 import logging
+
 from sqlalchemy import func
 from mgzdb.schema import (
-    File, Match, Series, VooblyLadder, Source, Tag,
-    Mod, Civilization, Map, VooblyUser
+    File, Match, Series, VooblyLadder, Source,
+    Mod, Civilization, Map, VooblyUser, Tag
 )
 
 
@@ -26,7 +27,6 @@ def get_summary(session):
         'files': session.query(File).count(),
         'matches': session.query(Match).count(),
         'series': session.query(Series).count(),
-        'tournaments': session.query(Tournament).count(),
         'ladders': _group_by_relation(session, VooblyLadder.name, Match, Match.voobly_ladder_id),
         'sources': _group_by_relation(session, Source.name, File, File.source_id),
         'tags': session.query(Tag).count(),
@@ -102,8 +102,7 @@ def get_match(session, match_id):
             'added': str(f.added)
         } for f in match.files],
         'series': {
-            'name': match.series.name if match.series else None,
-            'tournament': match.series.tournament.name if match.series and match.series.tournament else None
+            'name': match.series.name if match.series else None
         },
         'tags': [t.name for t in match.tags],
         'version': {
@@ -130,9 +129,13 @@ def get_match(session, match_id):
             'voobly_clan': p.voobly_clan.id if p.voobly_clan else None,
             'civilization': p.civilization.name,
             'human': p.human,
+            'score': p.score,
+            'mvp': p.mvp,
             'rate': {
                 'before': p.rate_before,
                 'after': p.rate_after
-            }
-        } for p in match.players]
+            },
+        } for p in match.players],
+        'teams': [[m.name for m in t.members] for t in match.teams],
+        'winners': [t.name for t in match.winning_team]
     }

@@ -23,7 +23,7 @@ DEFAULT_HOST = 'localhost'
 DEFAULT_DB = 'sqlite:///data.db'
 
 
-def main(args):
+def main(args): # pylint: disable=too-many-branches
     """Handle arguments."""
     db_api = API(
         args.database, args.store_host, args.store_path,

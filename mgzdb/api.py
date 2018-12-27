@@ -1,4 +1,5 @@
 """MGZ database API."""
+
 import csv
 import hashlib
 import io
@@ -11,7 +12,7 @@ from datetime import timedelta
 
 import iso8601
 import pkg_resources
-import requests
+import requests_cache
 from paramiko import SSHClient
 from sqlalchemy.orm.exc import NoResultFound
 
@@ -21,7 +22,7 @@ import voobly
 
 from mgzdb.schema import (
     get_session, Match, VooblyUser, Tag, Series, File, Source,
-    Mod, VooblyLadder, Player, Civilization, Map, VooblyClan
+    Mod, VooblyLadder, Player, Civilization, Map, VooblyClan, Team
 )
 from mgzdb.util import copy_file, fetch_file, parse_filename_timestamp
 from mgzdb import queries
@@ -53,12 +54,11 @@ class API:
         self.store_host = store_host
         self.store_path = store_path
         self.session = get_session(db_path)
-        self.http = requests.session()
+        self.aoe2map = requests_cache.CachedSession()
         self.voobly = voobly.get_session(
             key=voobly_key,
             username=voobly_username,
-            password=voobly_password,
-            cache=False
+            password=voobly_password
         )
 
     def add_url(self, voobly_url, download_path, tags, force=False):
@@ -88,7 +88,7 @@ class API:
             with zipfile.ZipFile(zip_path) as series_zip:
                 LOGGER.info("[%s] opened archive", os.path.basename(zip_path))
                 series_zip.extractall(temp_dir)
-                for filename in series_zip.namelist():
+                for filename in sorted(series_zip.namelist()):
                     if filename.endswith('/'):
                         continue
                     LOGGER.info("[%s] processing member file %s", os.path.basename(zip_path), filename)
@@ -203,7 +203,8 @@ class API:
     def _add_match(self, summary, played, tags, match_hash, series=None, challonge_id=None, voobly_id=None, force=False):
         postgame = summary.get_postgame()
         duration = summary.get_duration()
-        ladder = summary.get_ladder()
+        from_voobly, ladder = summary.get_ladder()
+        settings = summary.get_settings()
         map_name, map_size = summary.get_map()
         map_uuid = None
         completed = postgame.complete if postgame else False
@@ -211,6 +212,8 @@ class API:
         postgame = postgame is not None
         major_version, minor_version = summary.get_version()
         mod_name, mod_version = summary.get_mod()
+        teams = summary.get_teams()
+        diplomacy = summary.get_diplomacy()
         log_id = match_hash[:LOG_ID_LENGTH]
 
         flagged = False
@@ -228,8 +231,8 @@ class API:
                 return False
             LOGGER.warning("[m:%s] adding it anyway", log_id)
 
-        resp = self.http.get('{}/{}.rms'.format(MAP_URL, map_name)).json()
-        if len(resp['maps']) > 0:
+        resp = self.aoe2map.get('{}/{}.rms'.format(MAP_URL, map_name)).json()
+        if resp['maps']:
             map_uuid = resp['maps'][0]['uuid']
 
         match = self._get_unique(
@@ -242,33 +245,59 @@ class API:
             minor_version=minor_version,
             mod_version=mod_version,
             mod=self._get_unique(Mod, name=mod_name),
+            voobly=from_voobly,
             voobly_ladder=self._get_unique(VooblyLadder, name=ladder),
             map=self._get_unique(Map, name=map_name, uuid=map_uuid),
             map_size=map_size,
             duration=timedelta(milliseconds=duration),
             completed=completed,
             restored=restored,
-            postgame=postgame
+            postgame=postgame,
+            type=settings['type'],
+            difficulty=settings['difficulty'],
+            population_limit=settings['population_limit'],
+            reveal_map=settings['reveal_map'],
+            speed=settings['speed'],
+            cheats=settings['cheats'],
+            lock_teams=settings['lock_teams'],
+            diplomacy_type=diplomacy['type'],
+            team_size=diplomacy.get('team_size')
         )
 
+        winning_team_id = None
         for data in summary.get_players():
+            team_id = None
+            for i, team in enumerate(teams):
+                if data['number'] in team:
+                    team_id = i
+            if data['winner']:
+                winning_team_id = team_id
             player = Player(
                 civilization=self._get_unique(
                     Civilization,
                     name=mgz.const.CIVILIZATION_NAMES[data['civilization']]
                 ),
+                team=self._get_unique(
+                    Team,
+                    ['match', 'team_id'],
+                    match=match,
+                    team_id=team_id
+                ),
                 human=data['human'],
                 name=data['name'],
                 number=data['number'],
-                color_id=data['color_id']
+                color_id=data['color_id'],
+                winner=data['winner'],
+                mvp=data['mvp'],
+                score=data['score']
             )
-            if match.voobly_ladder:
+            if match.voobly:
                 self._guess_match_user(player, data['name'])
             match.players.append(player)
 
         if tags:
             self._add_tags(match, tags)
-
+        match.winning_team_id = winning_team_id
         return match
 
     def remove(self, file_id=None, match_id=None, series_id=None):

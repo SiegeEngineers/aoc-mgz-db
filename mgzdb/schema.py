@@ -5,7 +5,6 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
-from sqlalchemy.schema import UniqueConstraint
 
 
 BASE = declarative_base()
@@ -44,6 +43,16 @@ class File(BASE):
     parser_version = Column(String, nullable=False)
 
 
+class Team(BASE):
+    """Represent a team."""
+    __tablename__ = 'teams'
+    team_id = Column(Integer, primary_key=True)
+    match_id = Column(Integer, ForeignKey('matches.id'), primary_key=True)
+    match = relationship('Match', foreign_keys=match_id)
+    members = relationship('Player', primaryjoin='and_(Team.match_id==Player.match_id, ' \
+                                                 'Team.team_id==Player.team_id)')
+
+
 class Match(BASE):
     """Represents Match."""
     __tablename__ = 'matches'
@@ -57,9 +66,16 @@ class Match(BASE):
     mod_id = Column(Integer, ForeignKey('mods.id'))
     mod = relationship('Mod', foreign_keys=[mod_id])
     mod_version = Column(String)
+    voobly = Column(Boolean)
     voobly_ladder_id = Column(Integer, ForeignKey('voobly_ladders.id'))
     voobly_ladder = relationship('VooblyLadder', foreign_keys=[voobly_ladder_id])
     players = relationship('Player', back_populates='match', cascade='all, delete-orphan')
+    teams = relationship('Team', foreign_keys='Team.match_id')
+    winning_team_id = Column(Integer)
+    winning_team = relationship('Player', primaryjoin='and_(Player.match_id==Match.id, ' \
+                                                      'Player.team_id==Match.winning_team_id)')
+    losers = relationship('Player', primaryjoin='and_(Player.match_id==Match.id, ' \
+                                                 'Player.team_id!=Match.winning_team_id)')
     map_id = Column(Integer, ForeignKey('maps.id'))
     map = relationship('Map', foreign_keys=[map_id])
     map_size = Column(String)
@@ -70,6 +86,15 @@ class Match(BASE):
     completed = Column(Boolean)
     restored = Column(Boolean)
     postgame = Column(Boolean)
+    type = Column(String)
+    difficulty = Column(String)
+    population_limit = Column(Integer)
+    reveal_map = Column(String)
+    cheats = Column(Boolean)
+    speed = Column(String)
+    lock_teams = Column(Boolean)
+    diplomacy_type = Column(String, nullable=False)
+    team_size = Column(String)
 
 
 class Player(BASE):
@@ -84,9 +109,14 @@ class Player(BASE):
     voobly_clan = relationship('VooblyClan', foreign_keys=voobly_clan_id)
     name = Column(String, nullable=False)
     match = relationship('Match', foreign_keys=match_id)
+    team_id = Column(Integer, ForeignKey('teams.team_id'), nullable=False)
+    team = relationship('Team', foreign_keys=[match_id, team_id])
     civilization_id = Column(Integer, ForeignKey('civilizations.id'))
     civilization = relationship('Civilization', foreign_keys=[civilization_id])
     human = Column(Boolean)
+    winner = Column(Boolean)
+    mvp = Column(Boolean)
+    score = Column(Integer)
     rate_before = Column(Integer)
     rate_after = Column(Integer)
 
@@ -132,7 +162,7 @@ class Series(BASE):
     __tablename__ = 'series'
     id = Column(Integer, primary_key=True)
     name = Column(String)
-    challonge_id = Column(Integer)
+    challonge_id = Column(Integer, unique=True)
     matches = relationship('Match', foreign_keys='Match.series_id', cascade='all, delete-orphan')
 
 
