@@ -310,8 +310,11 @@ class API:
             obj = self.session.query(Match).get(match_id)
         if series_id:
             obj = self.session.query(Series).get(series_id)
-        self.session.delete(obj)
-        self.session.commit()
+        if obj:
+            self.session.delete(obj)
+            self.session.commit()
+        else:
+            print('not found')
 
     def tag(self, match_id, tags):
         """Tag a match."""

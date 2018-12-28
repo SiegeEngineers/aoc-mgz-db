@@ -1,10 +1,12 @@
 """MGZ database schema."""
 from datetime import datetime
 from sqlalchemy import (
-    create_engine, Boolean, DateTime, Column, ForeignKey, Integer, Interval, String
+    create_engine, Boolean, DateTime, Column,
+    ForeignKey, Integer, Interval, String
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy.schema import ForeignKeyConstraint
 
 
 BASE = declarative_base()
@@ -70,7 +72,7 @@ class Match(BASE):
     voobly_ladder_id = Column(Integer, ForeignKey('voobly_ladders.id'))
     voobly_ladder = relationship('VooblyLadder', foreign_keys=[voobly_ladder_id])
     players = relationship('Player', back_populates='match', cascade='all, delete-orphan')
-    teams = relationship('Team', foreign_keys='Team.match_id')
+    teams = relationship('Team', foreign_keys='Team.match_id', cascade='all, delete-orphan')
     winning_team_id = Column(Integer)
     winning_team = relationship('Player', primaryjoin='and_(Player.match_id==Match.id, ' \
                                                       'Player.team_id==Match.winning_team_id)')
@@ -108,9 +110,9 @@ class Player(BASE):
     voobly_clan_id = Column(String, ForeignKey('voobly_clans.id'))
     voobly_clan = relationship('VooblyClan', foreign_keys=voobly_clan_id)
     name = Column(String, nullable=False)
-    match = relationship('Match', foreign_keys=match_id)
-    team_id = Column(Integer, ForeignKey('teams.team_id'), nullable=False)
-    team = relationship('Team', foreign_keys=[match_id, team_id])
+    match = relationship('Match', viewonly=True)
+    team_id = Column(Integer)
+    team = relationship('Team')
     civilization_id = Column(Integer, ForeignKey('civilizations.id'))
     civilization = relationship('Civilization', foreign_keys=[civilization_id])
     human = Column(Boolean)
@@ -119,6 +121,7 @@ class Player(BASE):
     score = Column(Integer)
     rate_before = Column(Integer)
     rate_after = Column(Integer)
+    __table_args__ = (ForeignKeyConstraint(['match_id', 'team_id'], ['teams.match_id', 'teams.team_id']),)
 
 
 class VooblyUser(BASE):
