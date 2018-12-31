@@ -24,8 +24,7 @@ def fetch_file(ssh, path):
         with SCPClient(ssh.get_transport()) as scp:
             scp.get(path, local_path=temp.name)
         temp.flush()
-        with open(temp.name, 'rb') as handle:
-            return handle.read()
+        return open(temp.name, 'rb')
 
 
 def parse_series_path(path):

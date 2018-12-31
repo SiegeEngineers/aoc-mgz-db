@@ -4,7 +4,6 @@ import csv
 import hashlib
 import io
 import logging
-import lzma
 import os
 import tempfile
 import zipfile
@@ -26,6 +25,7 @@ from mgzdb.schema import (
 )
 from mgzdb.util import copy_file, fetch_file, parse_filename_timestamp
 from mgzdb import queries
+from mgzdb.compress import compress, decompress
 
 
 LOGGER = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ QUERY_FILE = 'file'
 QUERY_SERIES = 'series'
 QUERY_SUMMARY = 'summary'
 LOG_ID_LENGTH = 8
-COMPRESSED_EXT = '.xz'
+COMPRESSED_EXT = '.mgc'
 MAP_URL = 'https://aoe2map.net/api/rms/file'
 
 
@@ -165,10 +165,9 @@ class API:
             return False
 
         compressed_filename = '{}{}'.format(file_hash, COMPRESSED_EXT)
-        LOGGER.info("[f:%s] compressing %s as %s", log_id, os.path.basename(rec_path), compressed_filename)
         new_path = os.path.join(self.store_path, compressed_filename)
         LOGGER.info("[f:%s] copying to %s:%s", log_id, self.store_host, new_path)
-        copy_file(io.BytesIO(lzma.compress(data)), self.store, new_path)
+        copy_file(io.BytesIO(compress(io.BytesIO(data))), self.store, new_path)
 
         match_hash = summary.get_hash().hexdigest()
         try:
@@ -325,7 +324,7 @@ class API:
         """Get a file from the store."""
         mgz_file = self.session.query(File).get(file_id)
         store_path = os.path.join(self.store_path, mgz_file.filename)
-        return mgz_file.original_filename, lzma.decompress(fetch_file(self.store, store_path))
+        return mgz_file.original_filename, decompress(fetch_file(self.store, store_path))
 
     def query(self, query_type, **kwargs):
         """Query database."""
