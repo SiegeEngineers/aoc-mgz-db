@@ -45,7 +45,7 @@ MAP_URL = 'https://aoe2map.net/api/rms/file'
 class API:
     """MGZ Database API."""
 
-    def __init__(self, db_path, store_host, store_path, voobly_key, voobly_username, voobly_password):
+    def __init__(self, db_path, store_host, store_path, voobly_key=None, voobly_username=None, voobly_password=None):
         """Initialize sessions."""
         ssh = SSHClient()
         ssh.load_system_host_keys()
@@ -170,7 +170,7 @@ class API:
         LOGGER.info("[f:%s] copying to %s:%s", log_id, self.store_host, new_path)
         copy_file(io.BytesIO(lzma.compress(data)), self.store, new_path)
 
-        match_hash = summary.get_hash()
+        match_hash = summary.get_hash().hexdigest()
         try:
             match = self.session.query(Match).filter_by(hash=match_hash).one()
             LOGGER.info("[f:%s] match already exists; appending", log_id)

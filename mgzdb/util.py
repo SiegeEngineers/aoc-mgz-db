@@ -33,10 +33,16 @@ def parse_series_path(path):
     filename = os.path.basename(path)
     start = 0
     challonge_id = None
-    pattern = re.compile('[0-9]{' + str(CHALLONGE_ID_LENGTH) + '}')
-    if pattern.match(filename):
-        challonge_id = int(filename[:CHALLONGE_ID_LENGTH])
-        start = CHALLONGE_ID_LENGTH + 1
+    challonge_pattern = re.compile('[0-9]+')
+    challonge = challonge_pattern.match(filename)
+    if challonge:
+        challonge_id = int(filename[:challonge.end()])
+        start = challonge.end() + 1
+    manual_pattern = re.compile('.+?\-[0-9]+\-[0-9]+')
+    manual = manual_pattern.match(filename)
+    if manual:
+        challonge_id = filename[manual.start():manual.end()]
+        start = manual.end() + 1
     series = filename[start:].replace(ZIP_EXT, '')
     return series, challonge_id
 

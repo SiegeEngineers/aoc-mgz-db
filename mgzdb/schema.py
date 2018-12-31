@@ -165,7 +165,7 @@ class Series(BASE):
     __tablename__ = 'series'
     id = Column(Integer, primary_key=True)
     name = Column(String)
-    challonge_id = Column(Integer, unique=True)
+    challonge_id = Column(String, unique=True)
     matches = relationship('Match', foreign_keys='Match.series_id', cascade='all, delete-orphan')
 
 
