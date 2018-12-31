@@ -45,7 +45,7 @@ def compress(data):
     new_size = PREFIX_SIZE + len(lzma_header) + len(lzma_body)
 
     LOGGER.info("compressed input to %.1f%% of original size (%d->%d) in %.2f seconds",
-        (new_size / size) * 100, size, new_size, time.time() - start)
+                (new_size / size) * 100, size, new_size, time.time() - start)
     return struct.pack('<II', len(lzma_header) + PREFIX_SIZE, 0) + lzma_header + lzma_body
 
 

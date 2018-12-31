@@ -25,6 +25,12 @@ def get_session(url):
     return session
 
 
+def reset(url):
+    """Reset database - use with caution."""
+    engine = create_engine(url, echo=False)
+    BASE.metadata.drop_all(engine)
+
+
 class File(BASE):
     """Represent File."""
     __tablename__ = 'files'

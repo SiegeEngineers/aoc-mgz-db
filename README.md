@@ -4,13 +4,14 @@ Store and query recorded game metadata.
 
 ## Features
 
-- Add by file, match, series, or csv
+- Add by file, match, series, or csv (in parallel)
 - Tag matches
 - Supplement with Voobly player data
 - Detect duplicates
 - Detect player perspectives of the same match
 - Detect incomplete matches
 - CLI and API
+- Compresses stored files (~5% of original size)
 
 # Setup
 

@@ -14,6 +14,7 @@ CMD_ADD = 'add'
 CMD_REMOVE = 'remove'
 CMD_TAG = 'tag'
 CMD_GET = 'get'
+CMD_RESET = 'reset'
 SUBCMD_FILE = 'file'
 SUBCMD_MATCH = 'match'
 SUBCMD_CSV = 'csv'
@@ -27,7 +28,10 @@ def main(args): # pylint: disable=too-many-branches
     """Handle arguments."""
     db_api = API(
         args.database, args.store_host, args.store_path,
-        args.voobly_key, args.voobly_username, args.voobly_password
+        voobly_key=args.voobly_key,
+        voobly_username=args.voobly_username,
+        voobly_password=args.voobly_password,
+        consecutive=args.consecutive
     )
 
     # Add
@@ -55,6 +59,8 @@ def main(args): # pylint: disable=too-many-branches
         elif args.subcmd == SUBCMD_CSV:
             db_api.add_csv(args.csv_path, args.download_path, args.tags, force=args.force)
 
+        db_api.finished()
+
     # Remove
     elif args.cmd == CMD_REMOVE:
         db_api.remove(file_id=args.file, match_id=args.match, series_id=args.series)
@@ -78,12 +84,16 @@ def main(args): # pylint: disable=too-many-branches
             handle.write(data)
         print(output_filename)
 
+    # Reset
+    elif args.cmd == CMD_RESET:
+        if input('reset database completely? [y/N] ') == 'y':
+            db_api.reset()
 
 def setup():
     """Setup CLI."""
     coloredlogs.install(
         level='INFO',
-        fmt='%(asctime)s %(name)s %(levelname)s %(message)s'
+        fmt='%(asctime)s [%(process)d]%(name)s %(levelname)s %(message)s'
     )
     logging.getLogger('paramiko').setLevel(logging.WARN)
     logging.getLogger('voobly').setLevel(logging.WARN)
@@ -97,6 +107,7 @@ def setup():
     parser.add_argument('-k', '--voobly-key', default=os.environ.get('VOOBLY_KEY', None))
     parser.add_argument('-u', '--voobly-username', default=os.environ.get('VOOBLY_USERNAME', None))
     parser.add_argument('-p', '--voobly-password', default=os.environ.get('VOOBLY_PASSWORD', None))
+    parser.add_argument('-c', '--consecutive', action='store_true', default=False)
 
     # Commands
     subparsers = parser.add_subparsers(dest='cmd')
@@ -170,6 +181,9 @@ def setup():
     get = subparsers.add_parser(CMD_GET)
     get.add_argument('file')
     get.add_argument('-o', '--output-path')
+
+    # "reset" command
+    subparsers.add_parser(CMD_RESET)
 
     args = parser.parse_args()
     main(args)

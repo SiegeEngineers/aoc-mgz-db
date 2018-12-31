@@ -3,6 +3,7 @@ import os
 import tempfile
 import re
 from datetime import datetime
+from paramiko import SSHClient
 from scp import SCPClient
 
 
@@ -37,7 +38,7 @@ def parse_series_path(path):
     if challonge:
         challonge_id = int(filename[:challonge.end()])
         start = challonge.end() + 1
-    manual_pattern = re.compile('.+?\-[0-9]+\-[0-9]+')
+    manual_pattern = re.compile(r'.+?\-[0-9]+\-[0-9]+')
     manual = manual_pattern.match(filename)
     if manual:
         challonge_id = filename[manual.start():manual.end()]
@@ -58,3 +59,11 @@ def parse_filename_timestamp(func):
         minute=int(func[15:17]),
         second=int(func[17:19])
     )
+
+
+def get_store(store_host):
+    """Get connection to store."""
+    ssh = SSHClient()
+    ssh.load_system_host_keys()
+    ssh.connect(store_host)
+    return ssh
