@@ -5,6 +5,7 @@ import logging
 import os
 
 import coloredlogs
+import tqdm
 from mgzdb.api import API
 from mgzdb.util import parse_series_path
 
@@ -26,26 +27,40 @@ DEFAULT_DB = 'sqlite:///data.db'
 
 def main(args): # pylint: disable=too-many-branches
     """Handle arguments."""
+
+    add_callback = None
+    if args.progress:
+        progress = tqdm.tqdm(unit='mgz')
+        coloredlogs.set_level('CRITICAL')
+        add_callback = progress.update
+
     db_api = API(
         args.database, args.store_host, args.store_path,
         voobly_key=args.voobly_key,
         voobly_username=args.voobly_username,
         voobly_password=args.voobly_password,
-        consecutive=args.consecutive
+        consecutive=args.consecutive,
+        callback=add_callback
     )
 
     # Add
     if args.cmd == CMD_ADD:
 
+        db_api.start()
+
         # File
         if args.subcmd == SUBCMD_FILE:
             for rec in args.rec_path:
                 db_api.add_file(rec, args.source, None, args.tags, force=args.force)
+                if args.progress:
+                    progress.total = db_api.total
 
         # Match
         elif args.subcmd == SUBCMD_MATCH:
             for url in args.voobly_url:
                 db_api.add_url(url, args.download_path, args.tags, force=args.force)
+                if args.progress:
+                    progress.total = db_api.total
 
         # Series
         elif args.subcmd == SUBCMD_SERIES:
@@ -54,12 +69,18 @@ def main(args): # pylint: disable=too-many-branches
                 db_api.add_series(
                     path, args.tags, series, challonge_id, force=args.force
                 )
+                if args.progress:
+                    progress.total = db_api.total
 
         # CSV
         elif args.subcmd == SUBCMD_CSV:
             db_api.add_csv(args.csv_path, args.download_path, args.tags, force=args.force)
+            if args.progress:
+                progress.total = db_api.total
 
         db_api.finished()
+        if args.progress:
+            progress.close()
 
     # Remove
     elif args.cmd == CMD_REMOVE:
@@ -92,11 +113,12 @@ def main(args): # pylint: disable=too-many-branches
 def setup():
     """Setup CLI."""
     coloredlogs.install(
-        level='INFO',
+        level='CRITICAL',
         fmt='%(asctime)s [%(process)d]%(name)s %(levelname)s %(message)s'
     )
     logging.getLogger('paramiko').setLevel(logging.WARN)
     logging.getLogger('voobly').setLevel(logging.WARN)
+
     parser = argparse.ArgumentParser()
     default_file_path = os.path.abspath('.')
 
@@ -104,10 +126,11 @@ def setup():
     parser.add_argument('-d', '--database', default=os.environ.get('MGZ_DB', DEFAULT_DB))
     parser.add_argument('-sh', '--store-host', default=os.environ.get('MGZ_STORE_HOST', DEFAULT_HOST))
     parser.add_argument('-sp', '--store-path', default=os.environ.get('MGZ_STORE_PATH', default_file_path))
-    parser.add_argument('-k', '--voobly-key', default=os.environ.get('VOOBLY_KEY', None))
-    parser.add_argument('-u', '--voobly-username', default=os.environ.get('VOOBLY_USERNAME', None))
-    parser.add_argument('-p', '--voobly-password', default=os.environ.get('VOOBLY_PASSWORD', None))
+    parser.add_argument('-vk', '--voobly-key', default=os.environ.get('VOOBLY_KEY', None))
+    parser.add_argument('-vu', '--voobly-username', default=os.environ.get('VOOBLY_USERNAME', None))
+    parser.add_argument('-vp', '--voobly-password', default=os.environ.get('VOOBLY_PASSWORD', None))
     parser.add_argument('-c', '--consecutive', action='store_true', default=False)
+    parser.add_argument('-p', '--progress', action='store_true', default=False)
 
     # Commands
     subparsers = parser.add_subparsers(dest='cmd')

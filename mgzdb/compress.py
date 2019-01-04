@@ -32,7 +32,6 @@ LZMA_FILTERS = [
 def compress(data):
     """Compress from file."""
     start = time.time()
-
     header_len, _ = struct.unpack('<II', data.read(PREFIX_SIZE))
     zlib_header = data.read(header_len - PREFIX_SIZE)
     header = zlib.decompress(zlib_header, wbits=ZLIB_WBITS)

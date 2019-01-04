@@ -4,10 +4,12 @@ import csv
 import logging
 import multiprocessing
 import os
+import sys
 import tempfile
 import zipfile
 
 import iso8601
+import requests_cache
 from sqlalchemy.exc import IntegrityError
 
 import voobly
@@ -32,37 +34,74 @@ QUERY_SUMMARY = 'summary'
 class API: # pylint: disable=too-many-instance-attributes
     """MGZ Database API."""
 
-    def __init__(self, db_path, store_host, store_path, consecutive=False, **kwargs):
+    def __init__(self, db_path, store_host, store_path, consecutive=False, callback=None, **kwargs):
         """Initialize sessions."""
-        self.pool = multiprocessing.Pool(processes=1 if consecutive else None)
+
         self.session = get_session(db_path)
-        self.process_args = (db_path, store_host, store_path)
+        self.process_args = (store_host, store_path)
         self.process_kwargs = kwargs
         self.temp_dir = tempfile.TemporaryDirectory()
         self.store = get_store(store_host)
+        self.store_host = store_host
         self.store_path = store_path
         self.db_path = db_path
+        self.callback = callback
+        self.consecutive = consecutive
         self.voobly = voobly.get_session(
             key=kwargs.get('voobly_key'),
             username=kwargs.get('voobly_username'),
             password=kwargs.get('voobly_password')
         )
+        self.voobly_key = kwargs.get('voobly_key')
+        self.voobly_username = kwargs.get('voobly_username')
+        self.voobly_password = kwargs.get('voobly_password')
+        self.pool = None
+        self.total = 0
         LOGGER.info("connected to database @ %s", db_path)
+
+    def start(self):
+        """Start child processes."""
+        def init_worker(function):
+            function.connections = {
+                'store': get_store(self.store_host),
+                'session': get_session(self.db_path),
+                'aoe2map': requests_cache.CachedSession(backend='memory'),
+                'voobly': voobly.get_session(
+                    key=self.voobly_key,
+                    username=self.voobly_username,
+                    password=self.voobly_password
+                )
+            }
+        self.pool = multiprocessing.Pool(
+            initializer=init_worker,
+            initargs=(add_file, ),
+            processes=1 if self.consecutive else None
+        )
+
 
     def finished(self):
         """Wait for child processes to end."""
-        self.pool.close()
-        self.pool.join()
-        self.temp_dir.cleanup()
+        try:
+            self.pool.close()
+            self.pool.join()
+        except KeyboardInterrupt:
+            print('user requested exit')
+            sys.exit()
+        finally:
+            self.temp_dir.cleanup()
 
     def add_file(self, *args, **kwargs):
         """Add file via process pool."""
+        if not self.pool:
+            raise ValueError('call start() first')
+        self.total += 1
         kwargs.update(self.process_kwargs)
         self.pool.apply_async(
             add_file,
             args=(*self.process_args, *args),
             kwds=kwargs,
-            error_callback=_critical_error
+            callback=self._file_added,
+            error_callback=self._critical_error
         )
 
     def add_url(self, voobly_url, download_path, tags, force=False):
@@ -187,8 +226,12 @@ class API: # pylint: disable=too-many-instance-attributes
             return queries.get_summary(self.session)
         raise ValueError('unsupported query type')
 
+    def _file_added(self, success): # pylint: disable=unused-argument
+        """Callback when file is addded."""
+        if self.callback:
+            self.callback()
 
-def _critical_error(val):
-    """Handle critical errors from child processes."""
-    LOGGER.error("critical error:")
-    print(val)
+    def _critical_error(self, val): # pylint: disable=unused-argument
+        """Handle critical errors from child processes."""
+        if self.callback:
+            self.callback()

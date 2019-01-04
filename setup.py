@@ -18,6 +18,7 @@ setup(
         'requests-cache>=0.4.13',
         'scp>=0.13.0',
         'SQLAlchemy>=1.2.14',
+        'tqdm>=4.28.1',
         'voobly>=1.2.4'
     ],
     entry_points = {

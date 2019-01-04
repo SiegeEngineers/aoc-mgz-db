@@ -4,10 +4,10 @@ import hashlib
 import io
 import logging
 import os
+import sys
 from datetime import timedelta
 
 import pkg_resources
-import requests_cache
 from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.exc import IntegrityError
 
@@ -16,10 +16,10 @@ import mgz.summary
 import voobly
 
 from mgzdb.schema import (
-    get_session, Match, VooblyUser, Tag, Series, File, Source,
-    Mod, VooblyLadder, Player, Civilization, Map, VooblyClan, Team
+    Match, VooblyUser, Tag, Series, File, Source, Mod, VooblyLadder,
+    Player, Civilization, Map, VooblyClan, Team
 )
-from mgzdb.util import copy_file, get_store, parse_filename_timestamp
+from mgzdb.util import copy_file, parse_filename_timestamp
 from mgzdb.compress import compress
 
 
@@ -30,37 +30,34 @@ MAP_URL = 'https://aoe2map.net/api/rms/file'
 
 
 def add_file(
-        db_path, store_host, store_path,
-        rec_path, source, reference, tags, series=None, challonge_id=None,
-        voobly_id=None, played=None, force=False, user_data=None,
-        voobly_key=None, voobly_username=None, voobly_password=None
+        store_host, store_path, rec_path, source, reference, tags,
+        series=None, challonge_id=None, voobly_id=None, played=None,
+        force=False, user_data=None
     ):
     """Wrapper around AddFile class for parallelization."""
     obj = AddFile(
-        db_path, store_host, store_path,
-        voobly_key=voobly_key, voobly_username=voobly_username, voobly_password=voobly_password,
+        add_file.connections, store_host, store_path # pylint: disable=no-member
     )
-    return obj.add_file(
-        rec_path, source, reference, tags, series=series, challonge_id=challonge_id,
-        voobly_id=voobly_id, played=played, force=force, user_data=user_data
-    )
+    try:
+        return obj.add_file(
+            rec_path, source, reference, tags, series=series, challonge_id=challonge_id,
+            voobly_id=voobly_id, played=played, force=force, user_data=user_data
+        )
+    except KeyboardInterrupt:
+        sys.exit()
 
 
 class AddFile:
     """Add file to MGZ Database."""
 
-    def __init__(self, db_path, store_host, store_path, voobly_key=None, voobly_username=None, voobly_password=None):
+    def __init__(self, connections, store_host, store_path):
         """Initialize sessions."""
-        self.store = get_store(store_host)
         self.store_host = store_host
         self.store_path = store_path
-        self.session = get_session(db_path)
-        self.aoe2map = requests_cache.CachedSession()
-        self.voobly = voobly.get_session(
-            key=voobly_key,
-            username=voobly_username,
-            password=voobly_password
-        )
+        self.store = connections['store']
+        self.session = connections['session']
+        self.voobly = connections['voobly']
+        self.aoe2map = connections['aoe2map']
 
     def add_file(
             self, rec_path, source, reference, tags, series=None, challonge_id=None,

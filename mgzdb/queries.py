@@ -18,7 +18,7 @@ def _group_by(session, field):
 
 def _group_by_relation(session, field, relation, relation_field):
     """Group by a relation field."""
-    return dict(session.query(field, func.count(relation_field)).join(relation).group_by(relation_field).all())
+    return dict(session.query(field, func.count(relation_field)).join(relation).group_by(field, relation_field).all())
 
 
 def get_summary(session):
