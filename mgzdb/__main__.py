@@ -113,7 +113,7 @@ def main(args): # pylint: disable=too-many-branches
 def setup():
     """Setup CLI."""
     coloredlogs.install(
-        level='CRITICAL',
+        level='INFO',
         fmt='%(asctime)s [%(process)d]%(name)s %(levelname)s %(message)s'
     )
     logging.getLogger('paramiko').setLevel(logging.WARN)

@@ -39,7 +39,6 @@ class API: # pylint: disable=too-many-instance-attributes
 
         self.session = get_session(db_path)
         self.process_args = (store_host, store_path)
-        self.process_kwargs = kwargs
         self.temp_dir = tempfile.TemporaryDirectory()
         self.store = get_store(store_host)
         self.store_host = store_host
@@ -78,7 +77,6 @@ class API: # pylint: disable=too-many-instance-attributes
             processes=1 if self.consecutive else None
         )
 
-
     def finished(self):
         """Wait for child processes to end."""
         try:
@@ -95,7 +93,6 @@ class API: # pylint: disable=too-many-instance-attributes
         if not self.pool:
             raise ValueError('call start() first')
         self.total += 1
-        kwargs.update(self.process_kwargs)
         self.pool.apply_async(
             add_file,
             args=(*self.process_args, *args),

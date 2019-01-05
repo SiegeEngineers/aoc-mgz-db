@@ -28,7 +28,6 @@ LOG_ID_LENGTH = 8
 COMPRESSED_EXT = '.mgc'
 MAP_URL = 'https://aoe2map.net/api/rms/file'
 
-
 def add_file(
         store_host, store_path, rec_path, source, reference, tags,
         series=None, challonge_id=None, voobly_id=None, played=None,
