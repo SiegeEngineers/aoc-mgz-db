@@ -131,9 +131,9 @@ class AddFile:
         settings = summary.get_settings()
         map_name, map_size = summary.get_map()
         map_uuid = None
-        completed = postgame.complete if postgame else False
+        completed = summary.get_completed()
         restored, _ = summary.get_restored()
-        postgame = postgame is not None
+        has_postgame = True if postgame else False
         major_version, minor_version = summary.get_version()
         mod_name, mod_version = summary.get_mod()
         teams = summary.get_teams()
@@ -176,7 +176,7 @@ class AddFile:
             duration=timedelta(milliseconds=duration),
             completed=completed,
             restored=restored,
-            postgame=postgame,
+            postgame=has_postgame,
             type=settings['type'],
             difficulty=settings['difficulty'],
             population_limit=settings['population_limit'],
@@ -214,6 +214,8 @@ class AddFile:
                 name=data['name'],
                 number=data['number'],
                 color_id=data['color_id'],
+                start_x=data['position'][0],
+                start_y=data['position'][1],
                 winner=data['winner'],
                 mvp=data['mvp'],
                 score=data['score']

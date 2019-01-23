@@ -121,6 +121,8 @@ class Player(BASE):
     team = relationship('Team')
     civilization_id = Column(Integer, ForeignKey('civilizations.id'))
     civilization = relationship('Civilization', foreign_keys=[civilization_id])
+    start_x = Column(Integer)
+    start_y = Column(Integer)
     human = Column(Boolean)
     winner = Column(Boolean)
     mvp = Column(Boolean)
