@@ -17,14 +17,14 @@ Store and query recorded game metadata.
 
 - Install and configure a relational database supported by [SQLAlchemy](https://docs.sqlalchemy.org/en/latest/dialects/)
 - Determine [database connection url](https://docs.sqlalchemy.org/en/latest/core/engines.html#database-urls)
-- Ensure SSH connectivity to storage host
+- Ensure SSH key pair connectivity to storage host
 
 ## Environmental Variables
 
 Avoid passing credentials and connection information while using the CLI by setting the following environmental variables:
 
 - `MGZ_DB`: database connection url
-- `MGZ_STORE_HOST`: hostname of file storage
+- `MGZ_STORE_HOST`: hostname of file storage (\[user@\]host\[:port\])
 - `MGZ_STORE_PATH`: file system path for storage
 
 Optional:

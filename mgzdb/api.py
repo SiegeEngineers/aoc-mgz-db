@@ -40,7 +40,7 @@ class API: # pylint: disable=too-many-instance-attributes
         self.session = get_session(db_path)
         self.process_args = (store_host, store_path)
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.store = get_store(store_host)
+        self.store = None
         self.store_host = store_host
         self.store_path = store_path
         self.db_path = db_path
@@ -202,6 +202,8 @@ class API: # pylint: disable=too-many-instance-attributes
 
     def get(self, file_id):
         """Get a file from the store."""
+        if not self.store:
+            self.store = get_store(self.store_host)
         mgz_file = self.session.query(File).get(file_id)
         store_path = os.path.join(self.store_path, mgz_file.filename)
         return mgz_file.original_filename, decompress(fetch_file(self.store, store_path))

@@ -61,9 +61,17 @@ def parse_filename_timestamp(func):
     )
 
 
-def get_store(store_host):
+def get_store(store_host, port=22, username=None):
     """Get connection to store."""
     ssh = SSHClient()
     ssh.load_system_host_keys()
-    ssh.connect(store_host)
+    parts = store_host.split(':')
+    if len(parts) == 2:
+        store_host = parts[0]
+        port = int(parts[1])
+        parts = store_host.split('@')
+        if len(parts) == 2:
+            username = parts[0]
+            store_host = parts[1]
+    ssh.connect(store_host, port=port, username=username)
     return ssh

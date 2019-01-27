@@ -1,0 +1,7 @@
+dist
+venv
+mgzdb.egg-info
+*.pickle
+*.db
+*.sqlite
+__pycache__

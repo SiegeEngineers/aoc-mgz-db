@@ -133,7 +133,7 @@ class AddFile:
         map_uuid = None
         completed = summary.get_completed()
         restored, _ = summary.get_restored()
-        has_postgame = True if postgame else False
+        has_postgame = bool(postgame)
         major_version, minor_version = summary.get_version()
         mod_name, mod_version = summary.get_mod()
         teams = summary.get_teams()
