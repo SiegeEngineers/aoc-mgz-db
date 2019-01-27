@@ -1,3 +1,5 @@
+[![PyPI version](https://badge.fury.io/py/mgzdb.svg)](https://badge.fury.io/py/mgzdb)
+
 # Age of Empires II Recorded Game Database
 
 Store and query recorded game metadata.
@@ -24,7 +26,7 @@ Store and query recorded game metadata.
 Avoid passing credentials and connection information while using the CLI by setting the following environmental variables:
 
 - `MGZ_DB`: database connection url
-- `MGZ_STORE_HOST`: hostname of file storage (\[user@\]host\[:port\])
+- `MGZ_STORE_HOST`: hostname of file storage (`[user@]host[:port]`)
 - `MGZ_STORE_PATH`: file system path for storage
 
 Optional:
