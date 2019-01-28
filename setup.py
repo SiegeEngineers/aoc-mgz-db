@@ -13,13 +13,13 @@ setup(
     install_requires=[
         'coloredlogs>=10.0',
         'iso8601>=0.1.12',
-        'mgz>=1.2.1',
+        'mgz>=1.2.2',
         'requests>=2.20.1',
         'requests-cache>=0.4.13',
         'scp>=0.13.0',
         'SQLAlchemy>=1.2.14',
         'tqdm>=4.28.1',
-        'voobly>=1.2.4'
+        'voobly>=1.2.6'
     ],
     entry_points = {
         'console_scripts': ['mgzdb=mgzdb.__main__:setup'],
