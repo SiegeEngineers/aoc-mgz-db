@@ -101,7 +101,7 @@ class AddFile:
             LOGGER.info("[f:%s] adding match", log_id)
             if not played:
                 played = parse_filename_timestamp(original_filename)
-            match = self._add_match(summary, played, tags, match_hash, series, challonge_id, voobly_id, force)
+            match = self._add_match(summary, played, tags, match_hash, user_data, series, challonge_id, voobly_id, force)
             if not match:
                 return False
 
@@ -124,7 +124,7 @@ class AddFile:
         LOGGER.info("[f:%s] add finished, file id: %d, match id: %d", log_id, new_file.id, match.id)
         return True
 
-    def _add_match(self, summary, played, tags, match_hash, series=None, challonge_id=None, voobly_id=None, force=False):
+    def _add_match(self, summary, played, tags, match_hash, user_data, series=None, challonge_id=None, voobly_id=None, force=False):
         postgame = summary.get_postgame()
         duration = summary.get_duration()
         from_voobly, ladder = summary.get_ladder()
@@ -220,7 +220,7 @@ class AddFile:
                 mvp=data['mvp'],
                 score=data['score']
             )
-            if match.voobly:
+            if match.voobly and not user_data:
                 self._guess_match_user(player, data['name'])
 
         if tags:
@@ -238,7 +238,7 @@ class AddFile:
         if user_data:
             player = self.session.query(Player).filter_by(match_id=match_id, color_id=user_data['color_id']).one()
             LOGGER.info("[m:%s] updating voobly user data", player.match.hash[:LOG_ID_LENGTH])
-            player.voobly_user_id = user_data['id']
+            player.voobly_user = self._get_unique(VooblyUser, ['id'], id=user_data['id'])
             player.voobly_clan = self._get_unique(VooblyClan, ['id'], id=user_data['clan'])
             player.rate_before = user_data['rate_before']
             player.rate_after = user_data['rate_after']

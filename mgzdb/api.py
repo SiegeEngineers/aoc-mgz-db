@@ -101,15 +101,21 @@ class API: # pylint: disable=too-many-instance-attributes
             error_callback=self._critical_error
         )
 
-    def add_url(self, voobly_url, download_path, tags, force=False):
+    def add_url(self, voobly_url, download_path, tags, force=False, pov=False):
         """Add a match via Voobly url."""
-        voobly_id = voobly_url.split('/')[-1]
+        if isinstance(voobly_url, str):
+            voobly_id = voobly_url.split('/')[-1]
+        else:
+            voobly_id = voobly_url
         try:
             match = voobly.get_match(self.voobly, voobly_id)
         except voobly.VooblyError as error:
             LOGGER.error("failed to get match: %s", error)
             return
-        for player in match['players']:
+        players = [match['players'][0]]
+        if pov:
+            players = match['players']
+        for player in players:
             filename = voobly.download_rec(self.voobly, player['url'], download_path)
             self.add_file(
                 os.path.join(download_path, filename),
