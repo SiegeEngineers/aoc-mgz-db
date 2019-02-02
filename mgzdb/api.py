@@ -25,6 +25,7 @@ SOURCE_VOOBLY = 'voobly'
 SOURCE_ZIP = 'zip'
 SOURCE_CLI = 'cli'
 SOURCE_CSV = 'csv'
+SOURCE_DB = 'db'
 QUERY_MATCH = 'match'
 QUERY_FILE = 'file'
 QUERY_SERIES = 'series'
@@ -101,7 +102,7 @@ class API: # pylint: disable=too-many-instance-attributes
             error_callback=self._critical_error
         )
 
-    def add_url(self, voobly_url, download_path, tags, force=False, pov=False):
+    def add_url(self, voobly_url, download_path, tags, force=False, pov=True):
         """Add a match via Voobly url."""
         if isinstance(voobly_url, str):
             voobly_id = voobly_url.split('/')[-1]
@@ -170,7 +171,6 @@ class API: # pylint: disable=too-many-instance-attributes
                     force=force,
                     user_data={
                         'id': row['PlayerId'],
-                        'username': row['PlayerName'],
                         'clan': None,
                         'color_id': None, # this won't work until we can set `color_id`
                         'rate_before': row['PlayerPreRating'],
@@ -178,6 +178,35 @@ class API: # pylint: disable=too-many-instance-attributes
                     }
                 )
             LOGGER.info("[%s] finished parse", os.path.basename(csv_path))
+
+    def add_db(self, remote, tags, force=False):
+        """Add records from another database."""
+        for match in remote.session.query(Match).all():
+            for mgz in match.files:
+                filename, data = remote.get(mgz.id)
+                path = os.path.join(self.temp_dir.name, filename)
+                with open(path, 'wb') as handle:
+                    handle.write(data)
+                series = match.series.name if match.series else None
+                challonge_id = match.series.challonge_id if match.series else None
+                self.add_file(
+                    path,
+                    SOURCE_DB,
+                    mgz.id,
+                    tags,
+                    series,
+                    challonge_id=challonge_id,
+                    voobly_id=match.voobly_id,
+                    played=match.played,
+                    force=force,
+                    user_data={
+                        'id': mgz.owner.voobly_user_id,
+                        'clan': mgz.owner.voobly_clan_id,
+                        'color_id': mgz.owner.color_id,
+                        'rate_before': mgz.owner.rate_before,
+                        'rate_after': mgz.owner.rate_after
+                    }
+                )
 
     def remove(self, file_id=None, match_id=None, series_id=None):
         """Remove a file, match, or series."""
@@ -238,5 +267,6 @@ class API: # pylint: disable=too-many-instance-attributes
 
     def _critical_error(self, val): # pylint: disable=unused-argument
         """Handle critical errors from child processes."""
+        print(val, type(val))
         if self.callback:
             self.callback()

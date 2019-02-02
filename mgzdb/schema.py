@@ -88,7 +88,7 @@ class Match(BASE):
     map = relationship('Map', foreign_keys=[map_id])
     map_size = Column(String)
     played = Column(DateTime)
-    voobly_id = Column(Integer)
+    voobly_id = Column(Integer, unique=True)
     tags = relationship('Tag', foreign_keys='Tag.match_id', cascade='all, delete-orphan')
     duration = Column(Interval)
     completed = Column(Boolean)

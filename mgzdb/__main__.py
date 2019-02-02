@@ -21,6 +21,7 @@ SUBCMD_MATCH = 'match'
 SUBCMD_CSV = 'csv'
 SUBCMD_SERIES = 'series'
 SUBCMD_SUMMARY = 'summary'
+SUBCMD_DB = 'db'
 DEFAULT_HOST = 'localhost'
 DEFAULT_DB = 'sqlite:///data.db'
 
@@ -75,6 +76,13 @@ def main(args): # pylint: disable=too-many-branches
         # CSV
         elif args.subcmd == SUBCMD_CSV:
             db_api.add_csv(args.csv_path, args.download_path, args.tags, force=args.force)
+            if args.progress:
+                progress.total = db_api.total
+
+        # Database
+        elif args.subcmd == SUBCMD_DB:
+            remote_api = API(args.remote_db_url, args.remote_store_host, args.remote_store_path)
+            db_api.add_db(remote_api, args.tags, force=args.force)
             if args.progress:
                 progress.total = db_api.total
 
@@ -187,6 +195,12 @@ def setup():
     add_csv = add_subparsers.add_parser(SUBCMD_CSV)
     add_csv.add_argument('csv_path')
     add_csv.add_argument('-dp', '--download-path', default=default_file_path)
+
+    # "add database"
+    add_db = add_subparsers.add_parser(SUBCMD_DB)
+    add_db.add_argument('remote_db_url')
+    add_db.add_argument('remote_store_host')
+    add_db.add_argument('remote_store_path')
 
     # "remove" command
     remove = subparsers.add_parser(CMD_REMOVE)

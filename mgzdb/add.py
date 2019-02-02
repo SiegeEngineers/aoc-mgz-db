@@ -73,19 +73,19 @@ class AddFile:
         with open(rec_path, 'rb') as handle:
             data = handle.read()
 
-        file_hash = hashlib.sha1(data).hexdigest()
-        log_id = file_hash[:LOG_ID_LENGTH]
-        LOGGER.info("[f:%s] add started", log_id)
-
-        if self.session.query(File).filter_by(hash=file_hash).count() > 0:
-            LOGGER.warning("[f:%s] file already exists", log_id)
-            return False
-
         try:
             handle = io.BytesIO(data)
             summary = mgz.summary.Summary(handle, len(data))
+            # Hash against body only because header can vary based on compression
+            file_hash = hashlib.sha1(data[summary.body_position:]).hexdigest()
+            log_id = file_hash[:LOG_ID_LENGTH]
+            LOGGER.info("[f:%s] add started", log_id)
         except RuntimeError:
             LOGGER.error("[f:%s] invalid mgz file", log_id)
+            return False
+
+        if self.session.query(File).filter_by(hash=file_hash).count() > 0:
+            LOGGER.warning("[f:%s] file already exists", log_id)
             return False
 
         compressed_filename = '{}{}'.format(file_hash, COMPRESSED_EXT)
@@ -170,7 +170,7 @@ class AddFile:
             mod_version=mod_version,
             mod=self._get_unique(Mod, name=mod_name),
             voobly=from_voobly,
-            voobly_ladder=self._get_unique(VooblyLadder, name=ladder),
+            voobly_ladder=self._get_unique(VooblyLadder, id=voobly.lookup_ladder_id(ladder), name=ladder),
             map=self._get_unique(Map, name=map_name, uuid=map_uuid),
             map_size=map_size,
             duration=timedelta(milliseconds=duration),
@@ -201,6 +201,7 @@ class AddFile:
                 ['match_id', 'number'],
                 civilization=self._get_unique(
                     Civilization,
+                    id=int(data['civilization']),
                     name=mgz.const.CIVILIZATION_NAMES[data['civilization']]
                 ),
                 team=self._get_unique(
