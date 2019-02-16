@@ -72,17 +72,21 @@ class API: # pylint: disable=too-many-instance-attributes
                     password=self.voobly_password
                 )
             }
-        self.pool = multiprocessing.Pool(
-            initializer=init_worker,
-            initargs=(add_file, ),
-            processes=1 if self.consecutive else None
-        )
+        if self.consecutive:
+            init_worker(add_file)
+            self.debug = add_file
+        else:
+            self.pool = multiprocessing.Pool(
+                initializer=init_worker,
+                initargs=(add_file, )
+            )
 
     def finished(self):
         """Wait for child processes to end."""
         try:
-            self.pool.close()
-            self.pool.join()
+            if not self.consecutive:
+                self.pool.close()
+                self.pool.join()
         except KeyboardInterrupt:
             print('user requested exit')
             sys.exit()
@@ -91,16 +95,20 @@ class API: # pylint: disable=too-many-instance-attributes
 
     def add_file(self, *args, **kwargs):
         """Add file via process pool."""
-        if not self.pool:
-            raise ValueError('call start() first')
         self.total += 1
-        self.pool.apply_async(
-            add_file,
-            args=(*self.process_args, *args),
-            kwds=kwargs,
-            callback=self._file_added,
-            error_callback=self._critical_error
-        )
+        if self.consecutive:
+            self.debug(*self.process_args, *args, **kwargs)
+        else:
+            if not self.pool:
+                raise ValueError('call start() first')
+
+            self.pool.apply_async(
+                add_file,
+                args=(*self.process_args, *args),
+                kwds=kwargs,
+                callback=self._file_added,
+                error_callback=self._critical_error
+            )
 
     def add_url(self, voobly_url, download_path, tags, force=False, pov=True):
         """Add a match via Voobly url."""
@@ -112,6 +120,9 @@ class API: # pylint: disable=too-many-instance-attributes
             match = voobly.get_match(self.voobly, voobly_id)
         except voobly.VooblyError as error:
             LOGGER.error("failed to get match: %s", error)
+            return
+        except ValueError:
+            LOGGER.error("not an aoc match: %s", voobly_id)
             return
         players = [match['players'][0]]
         if pov:

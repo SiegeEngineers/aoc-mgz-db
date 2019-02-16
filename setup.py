@@ -10,6 +10,9 @@ setup(
     author='happyleaves',
     author_email='happyleaves.tfr@gmail.com',
     packages=find_packages(),
+    package_data={'mgzdb': [
+        'metadata/*.json',
+    ]},
     install_requires=[
         'coloredlogs>=10.0',
         'iso8601>=0.1.12',

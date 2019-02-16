@@ -10,6 +10,8 @@ from scp import SCPClient
 MGZ_EXT = '.mgz'
 ZIP_EXT = '.zip'
 CHALLONGE_ID_LENGTH = 9
+COLLAPSE_WHITESPACE = re.compile(r'\W+')
+REMOVE_STRINGS = ['(POV)', '(PoV)', 'PoV']
 
 
 def copy_file(handle, ssh, path):
@@ -44,6 +46,9 @@ def parse_series_path(path):
         challonge_id = filename[manual.start():manual.end()]
         start = manual.end() + 1
     series = filename[start:].replace(ZIP_EXT, '')
+    for remove in REMOVE_STRINGS:
+        series = series.replace(remove, '')
+    series = COLLAPSE_WHITESPACE.sub(' ', series)
     return series, challonge_id
 
 

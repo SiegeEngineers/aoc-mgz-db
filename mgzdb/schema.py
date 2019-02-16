@@ -8,6 +8,8 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy.schema import ForeignKeyConstraint
 
+from mgzdb.bootstrap import bootstrap
+
 
 BASE = declarative_base()
 
@@ -28,7 +30,10 @@ def get_session(url):
 def reset(url):
     """Reset database - use with caution."""
     engine = create_engine(url, echo=False)
+    session = sessionmaker(bind=engine)()
     BASE.metadata.drop_all(engine)
+    BASE.metadata.create_all(engine)
+    bootstrap(session)
 
 
 class File(BASE):
@@ -56,6 +61,7 @@ class Team(BASE):
     __tablename__ = 'teams'
     team_id = Column(Integer, primary_key=True)
     match_id = Column(Integer, ForeignKey('matches.id'), primary_key=True)
+    winner = Column(Boolean)
     match = relationship('Match', foreign_keys=match_id)
     members = relationship('Player', primaryjoin='and_(Team.match_id==Player.match_id, ' \
                                                  'Team.team_id==Player.team_id)')
@@ -71,19 +77,20 @@ class Match(BASE):
     files = relationship('File', foreign_keys='File.match_id', cascade='all, delete-orphan')
     version = Column(String)
     minor_version = Column(String)
-    mod_id = Column(Integer, ForeignKey('mods.id'))
-    mod = relationship('Mod', foreign_keys=[mod_id])
-    mod_version = Column(String)
+    dataset_id = Column(Integer, ForeignKey('datasets.id'))
+    dataset_version = Column(String)
+    dataset = relationship('Dataset', foreign_keys=dataset_id)
     voobly = Column(Boolean)
     voobly_ladder_id = Column(Integer, ForeignKey('voobly_ladders.id'))
     voobly_ladder = relationship('VooblyLadder', foreign_keys=[voobly_ladder_id])
+    rated = Column(Boolean)
     players = relationship('Player', back_populates='match', cascade='all, delete-orphan')
     teams = relationship('Team', foreign_keys='Team.match_id', cascade='all, delete-orphan')
     winning_team_id = Column(Integer)
     winning_team = relationship('Player', primaryjoin='and_(Player.match_id==Match.id, ' \
                                                       'Player.team_id==Match.winning_team_id)')
     losers = relationship('Player', primaryjoin='and_(Player.match_id==Match.id, ' \
-                                                 'Player.team_id!=Match.winning_team_id)')
+                                                'Player.team_id!=Match.winning_team_id)')
     map_id = Column(Integer, ForeignKey('maps.id'))
     map = relationship('Map', foreign_keys=[map_id])
     map_size = Column(String)
@@ -101,6 +108,7 @@ class Match(BASE):
     cheats = Column(Boolean)
     speed = Column(String)
     lock_teams = Column(Boolean)
+    mirror = Column(Boolean)
     diplomacy_type = Column(String, nullable=False)
     team_size = Column(String)
 
@@ -119,8 +127,11 @@ class Player(BASE):
     match = relationship('Match', viewonly=True)
     team_id = Column(Integer)
     team = relationship('Team')
-    civilization_id = Column(Integer, ForeignKey('civilizations.id'))
-    civilization = relationship('Civilization', foreign_keys=[civilization_id])
+    dataset_id = Column(Integer, ForeignKey('datasets.id'))
+    dataset = relationship('Dataset', foreign_keys=[dataset_id])
+    civilization_id = Column(Integer)
+    civilization = relationship('Civilization', back_populates='players', primaryjoin='and_(Player.dataset_id==Civilization.dataset_id, ' \
+                                                          'foreign(Player.civilization_id)==Civilization.id)')
     start_x = Column(Integer)
     start_y = Column(Integer)
     human = Column(Boolean)
@@ -129,7 +140,8 @@ class Player(BASE):
     score = Column(Integer)
     rate_before = Column(Integer)
     rate_after = Column(Integer)
-    __table_args__ = (ForeignKeyConstraint(['match_id', 'team_id'], ['teams.match_id', 'teams.team_id']),)
+    __table_args__ = (ForeignKeyConstraint(['match_id', 'team_id'], ['teams.match_id', 'teams.team_id']),
+            ForeignKeyConstraint(['civilization_id', 'dataset_id'], ['civilizations.id', 'civilizations.dataset_id']),)
 
 
 class VooblyUser(BASE):
@@ -153,11 +165,11 @@ class Source(BASE):
     name = Column(String, nullable=False)
 
 
-class Mod(BASE):
-    """Represents Mod."""
-    __tablename__ = 'mods'
+class Dataset(BASE):
+    """Represents a dataset."""
+    __tablename__ = 'datasets'
     id = Column(Integer, primary_key=True)
-    name = Column(String, unique=True)
+    name = Column(String)
 
 
 class Tag(BASE):
@@ -173,7 +185,7 @@ class Series(BASE):
     __tablename__ = 'series'
     id = Column(Integer, primary_key=True)
     name = Column(String)
-    challonge_id = Column(String, unique=True)
+    challonge_id = Column(String, index=True, unique=True)
     matches = relationship('Match', foreign_keys='Match.series_id', cascade='all, delete-orphan')
 
 
@@ -188,7 +200,21 @@ class Civilization(BASE):
     """Represent Civilization."""
     __tablename__ = 'civilizations'
     id = Column(Integer, primary_key=True)
+    dataset_id = Column(Integer, ForeignKey('datasets.id'), primary_key=True)
+    dataset = relationship('Dataset', foreign_keys=[dataset_id])
     name = Column(String, unique=True, nullable=False)
+    players = relationship('Player')
+    bonuses = relationship('CivilizationBonus', primaryjoin='and_(Civilization.id==foreign(CivilizationBonus.civilization_id), ' \
+                                                             'Civilization.dataset_id==CivilizationBonus.dataset_id)')
+
+
+class CivilizationBonus(BASE):
+    __tablename__ = 'civilization_bonuses'
+    id = Column(Integer, primary_key=True)
+    civilization_id = Column(Integer)
+    dataset_id = Column(Integer, ForeignKey('datasets.id'))
+    type = Column(String)
+    description = Column(String)
 
 
 class Map(BASE):
@@ -196,4 +222,4 @@ class Map(BASE):
     __tablename__ = 'maps'
     id = Column(Integer, primary_key=True)
     name = Column(String, unique=True, nullable=False)
-    uuid = Column(String, unique=True)
+    uuid = Column(String, index=True, unique=True)

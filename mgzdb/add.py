@@ -16,8 +16,8 @@ import mgz.summary
 import voobly
 
 from mgzdb.schema import (
-    Match, VooblyUser, Tag, Series, File, Source, Mod, VooblyLadder,
-    Player, Civilization, Map, VooblyClan, Team
+    Match, VooblyUser, Tag, Series, File, Source, VooblyLadder,
+    Player, Civilization, Map, VooblyClan, Team, Dataset
 )
 from mgzdb.util import copy_file, parse_filename_timestamp
 from mgzdb.compress import compress
@@ -27,6 +27,7 @@ LOGGER = logging.getLogger(__name__)
 LOG_ID_LENGTH = 8
 COMPRESSED_EXT = '.mgc'
 MAP_URL = 'https://aoe2map.net/api/rms/file'
+
 
 def add_file(
         store_host, store_path, rec_path, source, reference, tags,
@@ -81,7 +82,7 @@ class AddFile:
             log_id = file_hash[:LOG_ID_LENGTH]
             LOGGER.info("[f:%s] add started", log_id)
         except RuntimeError:
-            LOGGER.error("[f:%s] invalid mgz file", log_id)
+            LOGGER.error("[f] invalid mgz file")
             return False
 
         if self.session.query(File).filter_by(hash=file_hash).count() > 0:
@@ -95,15 +96,23 @@ class AddFile:
 
         match_hash = summary.get_hash().hexdigest()
         try:
-            match = self.session.query(Match).filter_by(hash=match_hash).one()
+            where = (Match.hash==match_hash)
+            if voobly_id:
+                where |= (Match.voobly_id==voobly_id)
+            match = self.session.query(Match).filter(where).one()
             LOGGER.info("[f:%s] match already exists; appending", log_id)
         except NoResultFound:
             LOGGER.info("[f:%s] adding match", log_id)
             if not played:
                 played = parse_filename_timestamp(original_filename)
-            match = self._add_match(summary, played, tags, match_hash, user_data, series, challonge_id, voobly_id, force)
-            if not match:
+            try:
+                match = self._add_match(summary, played, tags, match_hash, user_data, series, challonge_id, voobly_id, force)
+                if not match:
+                    return False
+            except IntegrityError:
+                LOGGER.error("[f:%s] constraint violation: could not add match", log_id)
                 return False
+
 
         self._update_match_user(match.id, user_data)
 
@@ -125,9 +134,10 @@ class AddFile:
         return True
 
     def _add_match(self, summary, played, tags, match_hash, user_data, series=None, challonge_id=None, voobly_id=None, force=False):
+        """Add a match."""
         postgame = summary.get_postgame()
         duration = summary.get_duration()
-        from_voobly, ladder = summary.get_ladder()
+        from_voobly, ladder, rated = summary.get_ladder()
         settings = summary.get_settings()
         map_name, map_size = summary.get_map()
         map_uuid = None
@@ -135,9 +145,11 @@ class AddFile:
         restored, _ = summary.get_restored()
         has_postgame = bool(postgame)
         major_version, minor_version = summary.get_version()
-        mod_name, mod_version = summary.get_mod()
+        ds = summary.get_dataset()
         teams = summary.get_teams()
         diplomacy = summary.get_diplomacy()
+        players = list(summary.get_players())
+        mirror = summary.get_mirror()
         log_id = match_hash[:LOG_ID_LENGTH]
 
         flagged = False
@@ -159,6 +171,17 @@ class AddFile:
         if resp['maps']:
             map_uuid = resp['maps'][0]['uuid']
 
+        try:
+            voobly_ladder = self._get_unique(VooblyLadder, id=voobly.lookup_ladder_id(ladder), name=ladder)
+        except ValueError:
+            voobly_ladder = None
+
+        try:
+            dataset = self.session.query(Dataset).filter_by(id=int(ds['id'])).one()
+        except NoResultFound:
+            LOGGER.error("[m:%s] dataset not supported: userpatch id: %s (%s)", log_id, ds['id'], ds['name'])
+            return False
+
         match = self._get_unique(
             Match, ['hash', 'voobly_id'],
             voobly_id=voobly_id,
@@ -167,10 +190,11 @@ class AddFile:
             series=self._get_unique(Series, name=series, challonge_id=challonge_id),
             version=major_version,
             minor_version=minor_version,
-            mod_version=mod_version,
-            mod=self._get_unique(Mod, name=mod_name),
+            dataset=dataset,
+            dataset_version=ds['version'],
             voobly=from_voobly,
-            voobly_ladder=self._get_unique(VooblyLadder, id=voobly.lookup_ladder_id(ladder), name=ladder),
+            voobly_ladder=voobly_ladder,
+            rated=rated,
             map=self._get_unique(Map, name=map_name, uuid=map_uuid),
             map_size=map_size,
             duration=timedelta(milliseconds=duration),
@@ -185,11 +209,12 @@ class AddFile:
             cheats=settings['cheats'],
             lock_teams=settings['lock_teams'],
             diplomacy_type=diplomacy['type'],
-            team_size=diplomacy.get('team_size')
+            team_size=diplomacy.get('team_size'),
+            mirror=mirror
         )
 
         winning_team_id = None
-        for data in summary.get_players():
+        for data in players:
             team_id = None
             for i, team in enumerate(teams):
                 if data['number'] in team:
@@ -202,15 +227,18 @@ class AddFile:
                 civilization=self._get_unique(
                     Civilization,
                     id=int(data['civilization']),
+                    dataset=dataset,
                     name=mgz.const.CIVILIZATION_NAMES[data['civilization']]
                 ),
                 team=self._get_unique(
                     Team,
                     ['match', 'team_id'],
+                    winner=(team_id == winning_team_id),
                     match=match,
                     team_id=team_id
                 ),
                 match_id=match.id,
+                dataset=dataset,
                 human=data['human'],
                 name=data['name'],
                 number=data['number'],
