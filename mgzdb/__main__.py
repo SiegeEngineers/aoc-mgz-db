@@ -16,6 +16,7 @@ CMD_REMOVE = 'remove'
 CMD_TAG = 'tag'
 CMD_GET = 'get'
 CMD_RESET = 'reset'
+CMD_BOOTSTRAP = 'bootstrap'
 SUBCMD_FILE = 'file'
 SUBCMD_MATCH = 'match'
 SUBCMD_CSV = 'csv'
@@ -117,6 +118,10 @@ def main(args): # pylint: disable=too-many-branches
     elif args.cmd == CMD_RESET:
         if input('reset database completely? [y/N] ') == 'y':
             db_api.reset()
+
+    # Bootstrap
+    elif args.cmd == CMD_BOOTSTRAP:
+        db_api.bootstrap()
 
 def setup():
     """Setup CLI."""
@@ -221,6 +226,9 @@ def setup():
 
     # "reset" command
     subparsers.add_parser(CMD_RESET)
+
+    # "bootstrap" command
+    subparsers.add_parser(CMD_BOOTSTRAP)
 
     args = parser.parse_args()
     main(args)

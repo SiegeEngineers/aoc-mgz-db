@@ -16,7 +16,7 @@ import voobly
 from mgzdb import queries
 from mgzdb.add import add_file
 from mgzdb.compress import decompress
-from mgzdb.schema import get_session, reset, Tag, File, Match, Series
+from mgzdb.schema import get_session, reset, bootstrap_db, Tag, File, Match, Series
 from mgzdb.util import get_store, fetch_file
 
 
@@ -258,6 +258,11 @@ class API: # pylint: disable=too-many-instance-attributes
         """Reset database."""
         reset(self.db_path)
         LOGGER.info("reset database")
+
+    def bootstrap(self):
+        """Bootstrap database."""
+        bootstrap_db(self.db_path)
+        LOGGER.info("bootstrapped database")
 
     def query(self, query_type, **kwargs):
         """Query database."""

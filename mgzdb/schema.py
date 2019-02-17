@@ -23,17 +23,21 @@ def get_session(url):
     """Get SQL session."""
     engine = create_engine(url, echo=False)
     session = sessionmaker(bind=engine)()
-    BASE.metadata.create_all(engine)
-    return session
+    return session, engine
 
 
 def reset(url):
     """Reset database - use with caution."""
-    engine = create_engine(url, echo=False)
-    session = sessionmaker(bind=engine)()
+    session, engine = get_session(url)
     BASE.metadata.drop_all(engine)
     BASE.metadata.create_all(engine)
-    bootstrap(session)
+    bootstrap(session, engine)
+
+
+def bootstrap_db(url):
+    """Bootstrap database."""
+    session, engine = get_session(url)
+    bootstrap(session, engine)
 
 
 class File(BASE):
@@ -202,7 +206,7 @@ class Civilization(BASE):
     id = Column(Integer, primary_key=True)
     dataset_id = Column(Integer, ForeignKey('datasets.id'), primary_key=True)
     dataset = relationship('Dataset', foreign_keys=[dataset_id])
-    name = Column(String, unique=True, nullable=False)
+    name = Column(String, nullable=False)
     players = relationship('Player')
     bonuses = relationship('CivilizationBonus', primaryjoin='and_(Civilization.id==foreign(CivilizationBonus.civilization_id), ' \
                                                              'Civilization.dataset_id==CivilizationBonus.dataset_id)')
