@@ -38,7 +38,7 @@ class API: # pylint: disable=too-many-instance-attributes
     def __init__(self, db_path, store_host, store_path, consecutive=False, callback=None, **kwargs):
         """Initialize sessions."""
 
-        self.session = get_session(db_path)
+        self.session, _ = get_session(db_path)
         self.process_args = (store_host, store_path)
         self.temp_dir = tempfile.TemporaryDirectory()
         self.store = None
@@ -64,7 +64,7 @@ class API: # pylint: disable=too-many-instance-attributes
         def init_worker(function):
             function.connections = {
                 'store': get_store(self.store_host),
-                'session': get_session(self.db_path),
+                'session': get_session(self.db_path)[0],
                 'aoe2map': requests_cache.CachedSession(backend='memory'),
                 'voobly': voobly.get_session(
                     key=self.voobly_key,

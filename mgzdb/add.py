@@ -16,8 +16,9 @@ import mgz.summary
 import voobly
 
 from mgzdb.schema import (
-    Match, VooblyUser, Tag, Series, File, Source, VooblyLadder,
-    Player, Civilization, Map, VooblyClan, Team, Dataset
+    Match, VooblyUser, Tag, Series, SeriesMetadata, File,
+    Source, VooblyLadder, Player, Civilization, Map,
+    VooblyClan, Team, Dataset
 )
 from mgzdb.util import copy_file, parse_filename_timestamp
 from mgzdb.compress import compress
@@ -40,7 +41,7 @@ def add_file(
     )
     try:
         return obj.add_file(
-            rec_path, source, reference, tags, series=series, challonge_id=challonge_id,
+            rec_path, source, reference, tags, series_name=series, challonge_id=challonge_id,
             voobly_id=voobly_id, played=played, force=force, user_data=user_data
         )
     except KeyboardInterrupt:
@@ -133,7 +134,7 @@ class AddFile:
         LOGGER.info("[f:%s] add finished, file id: %d, match id: %d", log_id, new_file.id, match.id)
         return True
 
-    def _add_match(self, summary, played, tags, match_hash, user_data, series=None, challonge_id=None, voobly_id=None, force=False):
+    def _add_match(self, summary, played, tags, match_hash, user_data, series_name=None, challonge_id=None, voobly_id=None, force=False):
         """Add a match."""
         postgame = summary.get_postgame()
         duration = summary.get_duration()
@@ -177,17 +178,24 @@ class AddFile:
             voobly_ladder = None
 
         try:
-            dataset = self.session.query(Dataset).filter_by(id=int(ds['id'])).one()
+            dataset = self.session.query(Dataset).get(ds['id']) #filter_by(id=int(ds['id'])).one()
         except NoResultFound:
             LOGGER.error("[m:%s] dataset not supported: userpatch id: %s (%s)", log_id, ds['id'], ds['name'])
             return False
+
+        if challonge_id and series_name:
+            series = self.session.query(Series).get(challonge_id)
+            series_metadata = self._get_unique(SeriesMetadata, name=series_name, series=series)
+            self.session.add(series_metadata)
+        else:
+            series_metadata = None
 
         match = self._get_unique(
             Match, ['hash', 'voobly_id'],
             voobly_id=voobly_id,
             played=played,
             hash=match_hash,
-            series=self._get_unique(Series, name=series, challonge_id=challonge_id),
+            series=series,
             version=major_version,
             minor_version=minor_version,
             dataset=dataset,
@@ -224,12 +232,7 @@ class AddFile:
             player = self._get_unique(
                 Player,
                 ['match_id', 'number'],
-                civilization=self._get_unique(
-                    Civilization,
-                    id=int(data['civilization']),
-                    dataset=dataset,
-                    name=mgz.const.CIVILIZATION_NAMES[data['civilization']]
-                ),
+                civilization_id=int(data['civilization']),
                 team=self._get_unique(
                     Team,
                     ['match', 'team_id'],

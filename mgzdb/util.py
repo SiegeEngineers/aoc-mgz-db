@@ -48,7 +48,7 @@ def parse_series_path(path):
     series = filename[start:].replace(ZIP_EXT, '')
     for remove in REMOVE_STRINGS:
         series = series.replace(remove, '')
-    series = COLLAPSE_WHITESPACE.sub(' ', series)
+    series = COLLAPSE_WHITESPACE.sub(' ', series).strip()
     return series, challonge_id
 
 

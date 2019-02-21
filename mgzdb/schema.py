@@ -5,13 +5,11 @@ from sqlalchemy import (
     ForeignKey, Integer, Interval, String
 )
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy.orm import relationship, sessionmaker, backref
 from sqlalchemy.schema import ForeignKeyConstraint
 
-from mgzdb.bootstrap import bootstrap
-
-
-BASE = declarative_base()
+from aocmetadata.bootstrap import bootstrap
+from aocmetadata.model import Dataset, Civilization, CivilizationBonus, Series, BASE
 
 
 def get_utc_now():
@@ -77,7 +75,7 @@ class Match(BASE):
     id = Column(Integer, primary_key=True)
     hash = Column(String, unique=True)
     series_id = Column(Integer, ForeignKey('series.id'))
-    series = relationship('Series', foreign_keys=series_id)
+    series = relationship('Series', foreign_keys=series_id, backref='matches')
     files = relationship('File', foreign_keys='File.match_id', cascade='all, delete-orphan')
     version = Column(String)
     minor_version = Column(String)
@@ -99,6 +97,7 @@ class Match(BASE):
     map = relationship('Map', foreign_keys=[map_id])
     map_size = Column(String)
     played = Column(DateTime)
+    added = Column(DateTime, default=get_utc_now)
     voobly_id = Column(Integer, unique=True)
     tags = relationship('Tag', foreign_keys='Tag.match_id', cascade='all, delete-orphan')
     duration = Column(Interval)
@@ -134,7 +133,7 @@ class Player(BASE):
     dataset_id = Column(Integer, ForeignKey('datasets.id'))
     dataset = relationship('Dataset', foreign_keys=[dataset_id])
     civilization_id = Column(Integer)
-    civilization = relationship('Civilization', back_populates='players', primaryjoin='and_(Player.dataset_id==Civilization.dataset_id, ' \
+    civilization = relationship('Civilization', backref='players', primaryjoin='and_(Player.dataset_id==Civilization.dataset_id, ' \
                                                           'foreign(Player.civilization_id)==Civilization.id)')
     start_x = Column(Integer)
     start_y = Column(Integer)
@@ -169,13 +168,6 @@ class Source(BASE):
     name = Column(String, nullable=False)
 
 
-class Dataset(BASE):
-    """Represents a dataset."""
-    __tablename__ = 'datasets'
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-
-
 class Tag(BASE):
     """Tag."""
     __tablename__ = 'tags'
@@ -183,14 +175,6 @@ class Tag(BASE):
     match_id = Column(Integer, ForeignKey('matches.id'), primary_key=True)
     match = relationship('Match', foreign_keys=match_id)
 
-
-class Series(BASE):
-    """Represents Series."""
-    __tablename__ = 'series'
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-    challonge_id = Column(String, index=True, unique=True)
-    matches = relationship('Match', foreign_keys='Match.series_id', cascade='all, delete-orphan')
 
 
 class VooblyLadder(BASE):
@@ -200,25 +184,12 @@ class VooblyLadder(BASE):
     name = Column(String, unique=True, nullable=False)
 
 
-class Civilization(BASE):
-    """Represent Civilization."""
-    __tablename__ = 'civilizations'
+class SeriesMetadata(BASE):
+    __tablename__ = 'series_metadata'
     id = Column(Integer, primary_key=True)
-    dataset_id = Column(Integer, ForeignKey('datasets.id'), primary_key=True)
-    dataset = relationship('Dataset', foreign_keys=[dataset_id])
-    name = Column(String, nullable=False)
-    players = relationship('Player')
-    bonuses = relationship('CivilizationBonus', primaryjoin='and_(Civilization.id==foreign(CivilizationBonus.civilization_id), ' \
-                                                             'Civilization.dataset_id==CivilizationBonus.dataset_id)')
-
-
-class CivilizationBonus(BASE):
-    __tablename__ = 'civilization_bonuses'
-    id = Column(Integer, primary_key=True)
-    civilization_id = Column(Integer)
-    dataset_id = Column(Integer, ForeignKey('datasets.id'))
-    type = Column(String)
-    description = Column(String)
+    series_id = Column(String, ForeignKey('series.id'))
+    series = relationship('Series', foreign_keys=[series_id], backref=backref('metadata', uselist=False))
+    name = Column(String)
 
 
 class Map(BASE):

@@ -14,6 +14,7 @@ setup(
         'metadata/*.json',
     ]},
     install_requires=[
+        'aocmetadata',
         'coloredlogs>=10.0',
         'iso8601>=0.1.12',
         'mgz>=1.2.2',
