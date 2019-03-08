@@ -5,20 +5,24 @@ import io
 import logging
 import os
 import sys
+import time
 from datetime import timedelta
 
 import pkg_resources
-from sqlalchemy.orm.exc import NoResultFound
+import requests
+from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 from sqlalchemy.exc import IntegrityError
 
+import voobly
 import mgz.const
 import mgz.summary
-import voobly
 
+from aocref.model import Series, Dataset
+from mgzdb.platforms import PLATFORM_VOOBLY, VOOBLY_PLATFORMS
 from mgzdb.schema import (
-    Match, VooblyUser, Tag, Series, SeriesMetadata, File,
-    Source, VooblyLadder, Player, Civilization, Map,
-    VooblyClan, Team, Dataset
+    Match, Tag, SeriesMetadata, File,
+    Source, Ladder, Player, Map,
+    Team, User
 )
 from mgzdb.util import copy_file, parse_filename_timestamp
 from mgzdb.compress import compress
@@ -27,12 +31,12 @@ from mgzdb.compress import compress
 LOGGER = logging.getLogger(__name__)
 LOG_ID_LENGTH = 8
 COMPRESSED_EXT = '.mgc'
-MAP_URL = 'https://aoe2map.net/api/rms/file'
 
 
 def add_file(
         store_host, store_path, rec_path, source, reference, tags,
-        series=None, challonge_id=None, voobly_id=None, played=None,
+        series=None, challonge_id=None, platform_id=None,
+        platform_match_id=None, played=None, ladder=None,
         force=False, user_data=None
     ):
     """Wrapper around AddFile class for parallelization."""
@@ -41,8 +45,10 @@ def add_file(
     )
     try:
         return obj.add_file(
-            rec_path, source, reference, tags, series_name=series, challonge_id=challonge_id,
-            voobly_id=voobly_id, played=played, force=force, user_data=user_data
+            rec_path, source, reference, tags, series_name=series,
+            challonge_id=challonge_id, platform_id=platform_id,
+            platform_match_id=platform_match_id, played=played,
+            ladder=ladder, force=force, user_data=user_data
         )
     except KeyboardInterrupt:
         sys.exit()
@@ -57,15 +63,16 @@ class AddFile:
         self.store_path = store_path
         self.store = connections['store']
         self.session = connections['session']
-        self.voobly = connections['voobly']
+        self.platforms = connections['platforms']
         self.aoe2map = connections['aoe2map']
 
-    def add_file(
-            self, rec_path, source, reference, tags, series=None, challonge_id=None,
-            voobly_id=None, played=None, force=False, user_data=None
+    def add_file( # pylint: disable=too-many-return-statements
+            self, rec_path, source, reference, tags, series_name=None,
+            challonge_id=None, platform_id=None, platform_match_id=None,
+            played=None, ladder=None, force=False, user_data=None
     ):
         """Add a single mgz file."""
-
+        start = time.time()
         if not os.path.isfile(rec_path):
             LOGGER.error("%s is not a file", rec_path)
             return False
@@ -90,32 +97,39 @@ class AddFile:
             LOGGER.warning("[f:%s] file already exists", log_id)
             return False
 
-        compressed_filename = '{}{}'.format(file_hash, COMPRESSED_EXT)
-        new_path = os.path.join(self.store_path, compressed_filename)
-        copy_file(io.BytesIO(compress(io.BytesIO(data))), self.store, new_path)
-        LOGGER.info("[f:%s] copied to %s:%s", log_id, self.store_host, new_path)
+        summary.work()
+        encoding = summary.get_encoding()
+        if encoding == 'unknown':
+            LOGGER.warning("[f:%s] unknown file text encoding", log_id)
+            return False
 
         match_hash = summary.get_hash().hexdigest()
         try:
-            where = (Match.hash==match_hash)
-            if voobly_id:
-                where |= (Match.voobly_id==voobly_id)
+            where = (Match.hash == match_hash)
+            if platform_match_id:
+                where |= (Match.platform_match_id == platform_match_id)
             match = self.session.query(Match).filter(where).one()
-            LOGGER.info("[f:%s] match already exists; appending", log_id)
+            LOGGER.info("[f:%s] match already exists (%d); appending", log_id, match.id)
+        except MultipleResultsFound:
+            LOGGER.error("[f:%s] mismatched hash and match id: %s, %s", log_id, match_hash, platform_match_id)
+            return False
         except NoResultFound:
             LOGGER.info("[f:%s] adding match", log_id)
             if not played:
                 played = parse_filename_timestamp(original_filename)
             try:
-                match = self._add_match(summary, played, tags, match_hash, user_data, series, challonge_id, voobly_id, force)
+                match = self._add_match(
+                    summary, played, tags, match_hash, user_data, series_name,
+                    challonge_id, platform_id, platform_match_id, ladder, force
+                )
                 if not match:
                     return False
             except IntegrityError:
                 LOGGER.error("[f:%s] constraint violation: could not add match", log_id)
                 return False
 
-
-        self._update_match_user(match.id, user_data)
+        compressed_filename, compressed_size = self._handle_file(file_hash, data)
+        self._update_match_users(platform_id, match.id, user_data)
 
         new_file = self._get_unique(
             File, ['hash'],
@@ -123,6 +137,9 @@ class AddFile:
             original_filename=original_filename,
             hash=file_hash,
             size=summary.size,
+            compressed_size=compressed_size,
+            encoding=encoding,
+            language=summary.get_language(),
             reference=reference,
             match=match,
             source=self._get_unique(Source, name=source),
@@ -131,27 +148,40 @@ class AddFile:
         )
         self.session.add(new_file)
         self.session.commit()
-        LOGGER.info("[f:%s] add finished, file id: %d, match id: %d", log_id, new_file.id, match.id)
+        LOGGER.info("[f:%s] add finished in %.2f seconds, file id: %d, match id: %d",
+                    log_id, time.time() - start, new_file.id, match.id)
         return True
 
-    def _add_match(self, summary, played, tags, match_hash, user_data, series_name=None, challonge_id=None, voobly_id=None, force=False):
+    def _add_match( # pylint: disable=too-many-branches
+            self, summary, played, tags, match_hash, user_data,
+            series_name=None, challonge_id=None, platform_id=None,
+            platform_match_id=None, ladder=None, force=False
+    ):
         """Add a match."""
         postgame = summary.get_postgame()
         duration = summary.get_duration()
-        from_voobly, ladder, rated = summary.get_ladder()
+        rated = False
+        from_voobly, ladder_name, rated, _ = summary.get_ladder()
+        if ladder:
+            rated = True
+        if not ladder:
+            ladder = ladder_name
+        if from_voobly:
+            platform_id = PLATFORM_VOOBLY
         settings = summary.get_settings()
-        map_name, map_size = summary.get_map()
-        map_uuid = None
+        map_name, map_size, map_seed, _ = summary.get_map()
         completed = summary.get_completed()
         restored, _ = summary.get_restored()
         has_postgame = bool(postgame)
         major_version, minor_version = summary.get_version()
-        ds = summary.get_dataset()
+        dataset_data = summary.get_dataset()
         teams = summary.get_teams()
         diplomacy = summary.get_diplomacy()
         players = list(summary.get_players())
         mirror = summary.get_mirror()
         log_id = match_hash[:LOG_ID_LENGTH]
+        if platform_match_id:
+            log_id += ':{}'.format(platform_match_id)
 
         flagged = False
         if restored:
@@ -168,43 +198,59 @@ class AddFile:
                 return False
             LOGGER.warning("[m:%s] adding it anyway", log_id)
 
-        resp = self.aoe2map.get('{}/{}.rms'.format(MAP_URL, map_name)).json()
-        if resp['maps']:
-            map_uuid = resp['maps'][0]['uuid']
+        if user_data and len(players) != len(user_data):
+            LOGGER.error("[m:%s] has mismatched user data", log_id)
+            return False
+
+        if platform_id:
+            try:
+                if platform_id in VOOBLY_PLATFORMS:
+                    ladder_id = voobly.lookup_ladder_id(ladder)
+                else:
+                    ladder_id = 1 # fix..
+                ladder = self._get_unique(
+                    Ladder, keys=['id', 'platform_id'], id=ladder_id,
+                    platform_id=platform_id, name=ladder
+                )
+            except ValueError:
+                ladder = None
+        else:
+            ladder = None
 
         try:
-            voobly_ladder = self._get_unique(VooblyLadder, id=voobly.lookup_ladder_id(ladder), name=ladder)
-        except ValueError:
-            voobly_ladder = None
-
-        try:
-            dataset = self.session.query(Dataset).get(ds['id']) #filter_by(id=int(ds['id'])).one()
+            dataset = self.session.query(Dataset).filter_by(id=dataset_data['id']).one()
         except NoResultFound:
-            LOGGER.error("[m:%s] dataset not supported: userpatch id: %s (%s)", log_id, ds['id'], ds['name'])
+            LOGGER.error("[m:%s] dataset not supported: userpatch id: %s (%s)",
+                         log_id, dataset_data['id'], dataset_data['name'])
             return False
 
         if challonge_id and series_name:
             series = self.session.query(Series).get(challonge_id)
-            series_metadata = self._get_unique(SeriesMetadata, name=series_name, series=series)
-            self.session.add(series_metadata)
+            series_metadata = self.session.query(SeriesMetadata) \
+                .filter(SeriesMetadata.name == series_name) \
+                .filter(SeriesMetadata.series_id == challonge_id) \
+                .one_or_none()
+            if not series_metadata:
+                series_metadata = SeriesMetadata(name=series_name, series=series)
+                self.session.add(series_metadata)
         else:
-            series_metadata = None
-
+            series = None
         match = self._get_unique(
-            Match, ['hash', 'voobly_id'],
-            voobly_id=voobly_id,
+            Match, ['hash', 'platform_match_id'],
+            platform_match_id=platform_match_id,
+            platform_id=platform_id,
             played=played,
             hash=match_hash,
             series=series,
             version=major_version,
             minor_version=minor_version,
             dataset=dataset,
-            dataset_version=ds['version'],
-            voobly=from_voobly,
-            voobly_ladder=voobly_ladder,
+            dataset_version=dataset_data['version'],
+            ladder=ladder,
             rated=rated,
-            map=self._get_unique(Map, name=map_name, uuid=map_uuid),
+            map=self._get_unique(Map, name=map_name),
             map_size=map_size,
+            map_seed=map_seed,
             duration=timedelta(milliseconds=duration),
             completed=completed,
             restored=restored,
@@ -216,6 +262,13 @@ class AddFile:
             speed=settings['speed'],
             cheats=settings['cheats'],
             lock_teams=settings['lock_teams'],
+            starting_resources=settings['starting_resources'],
+            starting_age=settings['starting_age'],
+            victory_condition=settings['victory_condition'],
+            team_together=settings['team_together'],
+            all_technologies=settings['all_technologies'],
+            lock_speed=settings['lock_speed'],
+            multiqueue=settings['multiqueue'],
             diplomacy_type=diplomacy['type'],
             team_size=diplomacy.get('team_size'),
             mirror=mirror
@@ -229,6 +282,9 @@ class AddFile:
                     team_id = i
             if data['winner']:
                 winning_team_id = team_id
+            feudal_time = data['achievements']['technology']['feudal_time']
+            castle_time = data['achievements']['technology']['castle_time']
+            imperial_time = data['achievements']['technology']['imperial_time']
             player = self._get_unique(
                 Player,
                 ['match_id', 'number'],
@@ -242,6 +298,7 @@ class AddFile:
                 ),
                 match_id=match.id,
                 dataset=dataset,
+                platform_id=platform_id,
                 human=data['human'],
                 name=data['name'],
                 number=data['number'],
@@ -250,9 +307,39 @@ class AddFile:
                 start_y=data['position'][1],
                 winner=data['winner'],
                 mvp=data['mvp'],
-                score=data['score']
+                score=data['score'],
+                rate_snapshot=data['rate_snapshot'],
+                military_score=data['achievements']['military']['score'],
+                units_killed=data['achievements']['military']['units_killed'],
+                hit_points_killed=data['achievements']['military']['hit_points_killed'],
+                units_lost=data['achievements']['military']['units_lost'],
+                buildings_razed=data['achievements']['military']['buildings_razed'],
+                hit_points_razed=data['achievements']['military']['hit_points_razed'],
+                buildings_lost=data['achievements']['military']['buildings_lost'],
+                units_converted=data['achievements']['military']['units_converted'],
+                economy_score=data['achievements']['economy']['score'],
+                food_collected=data['achievements']['economy']['food_collected'],
+                wood_collected=data['achievements']['economy']['wood_collected'],
+                stone_collected=data['achievements']['economy']['stone_collected'],
+                gold_collected=data['achievements']['economy']['gold_collected'],
+                tribute_sent=data['achievements']['economy']['tribute_sent'],
+                tribute_received=data['achievements']['economy']['tribute_received'],
+                trade_gold=data['achievements']['economy']['trade_gold'],
+                relic_gold=data['achievements']['economy']['relic_gold'],
+                technology_score=data['achievements']['technology']['score'],
+                feudal_time=timedelta(seconds=feudal_time) if feudal_time else None,
+                castle_time=timedelta(seconds=castle_time) if castle_time else None,
+                imperial_time=timedelta(seconds=imperial_time) if imperial_time else None,
+                explored_percent=data['achievements']['technology']['explored_percent'],
+                research_count=data['achievements']['technology']['research_count'],
+                research_percent=data['achievements']['technology']['research_percent'],
+                society_score=data['achievements']['society']['score'],
+                total_wonders=data['achievements']['society']['total_wonders'],
+                total_castles=data['achievements']['society']['total_castles'],
+                total_relics=data['achievements']['society']['total_relics'],
+                villager_high=data['achievements']['society']['villager_high']
             )
-            if match.voobly and not user_data:
+            if match.platform_id == PLATFORM_VOOBLY and not user_data:
                 self._guess_match_user(player, data['name'])
 
         if tags:
@@ -265,24 +352,43 @@ class AddFile:
         for tag in tags:
             self._get_unique(Tag, name=tag, match=match)
 
-    def _update_match_user(self, match_id, user_data):
+    def _update_match_users(self, platform_id, match_id, user_data):
         """Update Voobly User info on Match."""
         if user_data:
-            player = self.session.query(Player).filter_by(match_id=match_id, color_id=user_data['color_id']).one()
-            LOGGER.info("[m:%s] updating voobly user data", player.match.hash[:LOG_ID_LENGTH])
-            player.voobly_user = self._get_unique(VooblyUser, ['id'], id=user_data['id'])
-            player.voobly_clan = self._get_unique(VooblyClan, ['id'], id=user_data['clan'])
-            player.rate_before = user_data['rate_before']
-            player.rate_after = user_data['rate_after']
+            for user in user_data:
+                try:
+                    player = self.session.query(Player).filter_by(match_id=match_id, color_id=user['color_id']).one()
+                except NoResultFound:
+                    LOGGER.error("[m:%s] failed to find p%d to update platform user data",
+                                 player.match.hash[:LOG_ID_LENGTH], user['color_id'] + 1)
+                    continue
+                LOGGER.info("[m:%s] updating platform user data for p%d",
+                            player.match.hash[:LOG_ID_LENGTH], user['color_id'] + 1)
+                player.user = self._get_unique(User, ['id', 'platform_id'], id=user['id'], platform_id=platform_id)
+                player.rate_before = user.get('rate_before')
+                player.rate_after = user.get('rate_after')
+                if not player.rate_snapshot:
+                    player.rate_snapshot = user.get('rate_snapshot')
 
     def _guess_match_user(self, player, name):
         """Guess Voobly User from a player name."""
         try:
-            player.voobly_user = self._get_unique(VooblyUser, ['id'], id=voobly.find_user(self.voobly, name))
-            clan = name.split(']')[0][1:] if name.find(']') > 0 else None
-            player.voobly_clan = self._get_unique(VooblyClan, ['id'], id=clan)
-        except voobly.VooblyError as error:
+            player.user = self._get_unique(
+                User, ['id', 'platform_id'],
+                id=self.platforms[PLATFORM_VOOBLY].find_user(name.lstrip('+')),
+                platform_id=PLATFORM_VOOBLY
+            )
+        except (voobly.VooblyError, requests.exceptions.ConnectionError) as error:
             LOGGER.warning("failed to lookup Voobly user: %s", error)
+
+    def _handle_file(self, file_hash, data):
+        """Handle file: compress and store."""
+        compressed_filename = '{}{}'.format(file_hash, COMPRESSED_EXT)
+        compressed_data = compress(io.BytesIO(data))
+        new_path = os.path.join(self.store_path, compressed_filename)
+        copy_file(io.BytesIO(compressed_data), self.store, new_path)
+        LOGGER.info("[f:%s] copied to %s:%s", file_hash[:LOG_ID_LENGTH], self.store_host, new_path)
+        return compressed_filename, len(compressed_data)
 
     def _get_by_keys(self, table, keys, **kwargs):
         """Get object by unique keys."""

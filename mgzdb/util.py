@@ -38,7 +38,7 @@ def parse_series_path(path):
     challonge_pattern = re.compile('[0-9]+')
     challonge = challonge_pattern.match(filename)
     if challonge:
-        challonge_id = int(filename[:challonge.end()])
+        challonge_id = filename[:challonge.end()]
         start = challonge.end() + 1
     manual_pattern = re.compile(r'.+?\-[0-9]+\-[0-9]+')
     manual = manual_pattern.match(filename)

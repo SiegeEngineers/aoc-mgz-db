@@ -1,8 +1,8 @@
 """MGZ database API."""
 
-import csv
 import logging
 import multiprocessing
+import json
 import os
 import sys
 import tempfile
@@ -13,15 +13,17 @@ import requests_cache
 from sqlalchemy.exc import IntegrityError
 
 import voobly
-from mgzdb import queries
+from aocref.model import Series
+from mgzdb import queries, platforms
 from mgzdb.add import add_file
 from mgzdb.compress import decompress
-from mgzdb.schema import get_session, reset, bootstrap_db, Tag, File, Match, Series
+from mgzdb.schema import get_session, reset, bootstrap_db, Tag, File, Match
 from mgzdb.util import get_store, fetch_file
 
 
 LOGGER = logging.getLogger(__name__)
-SOURCE_VOOBLY = 'voobly'
+SOURCE_PLATFORM = 'platform'
+SOURCE_ARCHIVE = 'archive'
 SOURCE_ZIP = 'zip'
 SOURCE_CLI = 'cli'
 SOURCE_CSV = 'csv'
@@ -46,11 +48,12 @@ class API: # pylint: disable=too-many-instance-attributes
         self.store_path = store_path
         self.db_path = db_path
         self.callback = callback
+        self.debug = None
         self.consecutive = consecutive
-        self.voobly = voobly.get_session(
-            key=kwargs.get('voobly_key'),
-            username=kwargs.get('voobly_username'),
-            password=kwargs.get('voobly_password')
+        self.platforms = platforms.factory(
+            voobly_key=kwargs.get('voobly_key'),
+            voobly_username=kwargs.get('voobly_username'),
+            voobly_password=kwargs.get('voobly_password')
         )
         self.voobly_key = kwargs.get('voobly_key')
         self.voobly_username = kwargs.get('voobly_username')
@@ -66,10 +69,10 @@ class API: # pylint: disable=too-many-instance-attributes
                 'store': get_store(self.store_host),
                 'session': get_session(self.db_path)[0],
                 'aoe2map': requests_cache.CachedSession(backend='memory'),
-                'voobly': voobly.get_session(
-                    key=self.voobly_key,
-                    username=self.voobly_username,
-                    password=self.voobly_password
+                'platforms': platforms.factory(
+                    voobly_key=self.voobly_key,
+                    voobly_username=self.voobly_username,
+                    voobly_password=self.voobly_password
                 )
             }
         if self.consecutive:
@@ -110,34 +113,42 @@ class API: # pylint: disable=too-many-instance-attributes
                 error_callback=self._critical_error
             )
 
-    def add_url(self, voobly_url, download_path, tags, force=False, pov=True):
-        """Add a match via Voobly url."""
-        if isinstance(voobly_url, str):
-            voobly_id = voobly_url.split('/')[-1]
+    def add_match(self, platform, url, tags, force=False, single_pov=False):
+        """Add a match via platform url."""
+        if isinstance(url, str):
+            match_id = url.split('/')[-1]
         else:
-            voobly_id = voobly_url
+            match_id = url
         try:
-            match = voobly.get_match(self.voobly, voobly_id)
+            match = self.platforms[platform].get_match(match_id)
         except voobly.VooblyError as error:
             LOGGER.error("failed to get match: %s", error)
             return
         except ValueError:
-            LOGGER.error("not an aoc match: %s", voobly_id)
+            LOGGER.error("not an aoc match: %s", match_id)
             return
-        players = [match['players'][0]]
-        if pov:
-            players = match['players']
+        players = match['players']
+        if single_pov:
+            for player in players:
+                if player['url']:
+                    chose = player
+                    break
+            players = [chose]
         for player in players:
-            filename = voobly.download_rec(self.voobly, player['url'], download_path)
+            if not player['url']:
+                continue
+            filename = self.platforms[platform].download_rec(player['url'], self.temp_dir.name)
             self.add_file(
-                os.path.join(download_path, filename),
-                SOURCE_VOOBLY,
-                voobly_url,
+                os.path.join(self.temp_dir.name, filename),
+                platform,
+                url,
                 tags,
-                voobly_id=voobly_id,
+                platform_id=platform,
+                platform_match_id=match_id,
                 played=match['timestamp'],
+                ladder=match.get('ladder'),
                 force=force,
-                user_data=player
+                user_data=match['players']
             )
 
     def add_series(self, zip_path, tags, series=None, challonge_id=None, force=False):
@@ -160,36 +171,6 @@ class API: # pylint: disable=too-many-instance-attributes
                 )
             LOGGER.info("[%s] finished", os.path.basename(zip_path))
 
-    def add_csv(self, csv_path, download_path, tags, force=False):
-        """Add matches from CSV."""
-        LOGGER.info("opening %s for import", csv_path)
-        with open(csv_path) as csv_file:
-            LOGGER.info("[%s] starting parse", os.path.basename(csv_path))
-            for num, row in enumerate(csv.DictReader(csv_file)):
-                LOGGER.info("[%s] adding data from row %d", os.path.basename(csv_path), num + 1)
-                url = row['PlayerRecording'].replace(voobly.BASE_URL, '')
-                filename = voobly.download_rec(self.voobly, url, download_path)
-                old_path = os.path.join(download_path, filename)
-                new_path = os.path.join(download_path, '{}.{}'.format(row['PlayerId'], filename))
-                os.rename(old_path, new_path)
-                self.add_file(
-                    new_path,
-                    SOURCE_CSV,
-                    os.path.basename(csv_path),
-                    tags,
-                    voobly_id=row['MatchId'],
-                    played=iso8601.parse_date(row['MatchDate']),
-                    force=force,
-                    user_data={
-                        'id': row['PlayerId'],
-                        'clan': None,
-                        'color_id': None, # this won't work until we can set `color_id`
-                        'rate_before': row['PlayerPreRating'],
-                        'rate_after': row['PlayerPostRating']
-                    }
-                )
-            LOGGER.info("[%s] finished parse", os.path.basename(csv_path))
-
     def add_db(self, remote, tags, force=False):
         """Add records from another database."""
         for match in remote.session.query(Match).all():
@@ -207,17 +188,54 @@ class API: # pylint: disable=too-many-instance-attributes
                     tags,
                     series,
                     challonge_id=challonge_id,
-                    voobly_id=match.voobly_id,
+                    platform_id=match.platform_id,
+                    platform_match_id=match.platform_match_id,
                     played=match.played,
+                    ladder=match.ladder.name if match.ladder else None,
                     force=force,
-                    user_data={
+                    user_data=[{
                         'id': mgz.owner.voobly_user_id,
                         'clan': mgz.owner.voobly_clan_id,
                         'color_id': mgz.owner.color_id,
                         'rate_before': mgz.owner.rate_before,
                         'rate_after': mgz.owner.rate_after
-                    }
+                    }]
                 )
+
+    def add_archive(self, path, single_pov=False):
+        """Add records from archive."""
+        archive_path = os.path.abspath(os.path.expanduser(path))
+        for platform in os.listdir(archive_path):
+            LOGGER.info("[%s] starting platform", platform)
+            for subdir in os.listdir(os.path.join(archive_path, platform)):
+                for match_id in os.listdir(os.path.join(archive_path, platform, subdir)):
+                    match_path = os.path.join(archive_path, platform, subdir, match_id)
+                    if not os.path.exists(os.path.join(match_path, 'metadata.json')):
+                        continue
+                    for zipped in os.listdir(match_path):
+                        if zipped.endswith('.zip'):
+                            with zipfile.ZipFile(os.path.join(match_path, zipped), 'r') as zip_ref:
+                                zip_ref.extractall(os.path.join(self.temp_dir.name, match_id))
+                    for mgz in os.listdir(os.path.join(self.temp_dir.name, match_id)):
+                        if not mgz.endswith('.mgz'):
+                            continue
+                        mgz_path = os.path.join(self.temp_dir.name, match_id, mgz)
+                        LOGGER.info('[%s][%s] adding match: %s', platform, match_id, mgz_path)
+                        match = json.loads(open(os.path.join(match_path, 'metadata.json'), 'r').read())
+                        self.add_file(
+                            mgz_path,
+                            SOURCE_ARCHIVE,
+                            mgz,
+                            None, # tags
+                            None, # series
+                            platform_id=platform,
+                            platform_match_id=int(match_id),
+                            ladder=match.get('ladder'),
+                            played=iso8601.parse_date(match['timestamp']),
+                            user_data=match['players']
+                        )
+                        if single_pov:
+                            break
 
     def remove(self, file_id=None, match_id=None, series_id=None):
         """Remove a file, match, or series."""

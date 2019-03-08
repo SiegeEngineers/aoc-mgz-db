@@ -19,9 +19,9 @@ CMD_RESET = 'reset'
 CMD_BOOTSTRAP = 'bootstrap'
 SUBCMD_FILE = 'file'
 SUBCMD_MATCH = 'match'
-SUBCMD_CSV = 'csv'
 SUBCMD_SERIES = 'series'
 SUBCMD_SUMMARY = 'summary'
+SUBCMD_ARCHIVE = 'archive'
 SUBCMD_DB = 'db'
 DEFAULT_HOST = 'localhost'
 DEFAULT_DB = 'sqlite:///data.db'
@@ -59,8 +59,8 @@ def main(args): # pylint: disable=too-many-branches
 
         # Match
         elif args.subcmd == SUBCMD_MATCH:
-            for url in args.voobly_url:
-                db_api.add_url(url, args.download_path, args.tags, force=args.force)
+            for url in args.url:
+                db_api.add_match(args.platform, url, args.tags, force=args.force)
                 if args.progress:
                     progress.total = db_api.total
 
@@ -74,16 +74,16 @@ def main(args): # pylint: disable=too-many-branches
                 if args.progress:
                     progress.total = db_api.total
 
-        # CSV
-        elif args.subcmd == SUBCMD_CSV:
-            db_api.add_csv(args.csv_path, args.download_path, args.tags, force=args.force)
-            if args.progress:
-                progress.total = db_api.total
-
         # Database
         elif args.subcmd == SUBCMD_DB:
             remote_api = API(args.remote_db_url, args.remote_store_host, args.remote_store_path)
             db_api.add_db(remote_api, args.tags, force=args.force)
+            if args.progress:
+                progress.total = db_api.total
+
+        # Archive
+        elif args.subcmd == SUBCMD_ARCHIVE:
+            db_api.add_archive(args.archive_path)
             if args.progress:
                 progress.total = db_api.total
 
@@ -189,23 +189,22 @@ def setup():
 
     # "add match"
     add_match = add_subparsers.add_parser(SUBCMD_MATCH)
-    add_match.add_argument('voobly_url', nargs='+')
-    add_match.add_argument('-dp', '--download-path', default=default_file_path)
+    add_match.add_argument('platform')
+    add_match.add_argument('url', nargs='+')
 
     # "add series"
     add_series = add_subparsers.add_parser(SUBCMD_SERIES)
     add_series.add_argument('zip_path', nargs='+')
-
-    # "add csv"
-    add_csv = add_subparsers.add_parser(SUBCMD_CSV)
-    add_csv.add_argument('csv_path')
-    add_csv.add_argument('-dp', '--download-path', default=default_file_path)
 
     # "add database"
     add_db = add_subparsers.add_parser(SUBCMD_DB)
     add_db.add_argument('remote_db_url')
     add_db.add_argument('remote_store_host')
     add_db.add_argument('remote_store_path')
+
+    # "add archive"
+    add_archive = add_subparsers.add_parser(SUBCMD_ARCHIVE)
+    add_archive.add_argument('archive_path')
 
     # "remove" command
     remove = subparsers.add_parser(CMD_REMOVE)
