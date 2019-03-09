@@ -10,10 +10,8 @@ import zipfile
 
 import iso8601
 import requests_cache
-from sqlalchemy.exc import IntegrityError
 
 import voobly
-from aocref.model import Series
 from mgzdb import queries, platforms
 from mgzdb.add import add_file
 from mgzdb.compress import decompress
@@ -149,7 +147,7 @@ class API: # pylint: disable=too-many-instance-attributes
                 user_data=match['players']
             )
 
-    def add_series(self, zip_path, series=None, challonge_id=None):
+    def add_series(self, zip_path, series=None, series_id=None):
         """Add a series via zip file."""
         with zipfile.ZipFile(zip_path) as series_zip:
             LOGGER.info("[%s] opened archive", os.path.basename(zip_path))
@@ -163,7 +161,7 @@ class API: # pylint: disable=too-many-instance-attributes
                     SOURCE_ZIP,
                     os.path.basename(zip_path),
                     series,
-                    challonge_id
+                    series_id
                 )
             LOGGER.info("[%s] finished", os.path.basename(zip_path))
 
@@ -176,13 +174,13 @@ class API: # pylint: disable=too-many-instance-attributes
                 with open(path, 'wb') as handle:
                     handle.write(data)
                 series = match.series.name if match.series else None
-                challonge_id = match.series.challonge_id if match.series else None
+                series_id = match.series.series_id if match.series else None
                 self.add_file(
                     path,
                     SOURCE_DB,
                     mgz.id,
                     series,
-                    challonge_id=challonge_id,
+                    series_id=series_id,
                     platform_id=match.platform_id,
                     platform_match_id=match.platform_match_id,
                     played=match.played,
@@ -230,7 +228,7 @@ class API: # pylint: disable=too-many-instance-attributes
                         if single_pov:
                             break
 
-    def remove(self, file_id=None, match_id=None, series_id=None):
+    def remove(self, file_id=None, match_id=None):
         """Remove a file, match, or series."""
         if file_id:
             obj = self.session.query(File).get(file_id)
@@ -238,8 +236,6 @@ class API: # pylint: disable=too-many-instance-attributes
                 obj = obj.match.files[0].match
         if match_id:
             obj = self.session.query(Match).get(match_id)
-        if series_id:
-            obj = self.session.query(Series).get(series_id)
         if obj:
             self.session.delete(obj)
             self.session.commit()

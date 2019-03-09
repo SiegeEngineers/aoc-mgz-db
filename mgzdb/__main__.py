@@ -66,9 +66,9 @@ def main(args): # pylint: disable=too-many-branches
         # Series
         elif args.subcmd == SUBCMD_SERIES:
             for path in args.zip_path:
-                series, challonge_id = parse_series_path(path)
+                series, series_id = parse_series_path(path)
                 db_api.add_series(
-                    path, args.tags, series, challonge_id
+                    path, series, series_id
                 )
                 if args.progress:
                     progress.total = db_api.total
@@ -92,7 +92,7 @@ def main(args): # pylint: disable=too-many-branches
 
     # Remove
     elif args.cmd == CMD_REMOVE:
-        db_api.remove(file_id=args.file, match_id=args.match, series_id=args.series)
+        db_api.remove(file_id=args.file, match_id=args.match)
 
     # Query
     elif args.cmd == CMD_QUERY:
@@ -201,7 +201,6 @@ def setup():
     remove_group = remove.add_mutually_exclusive_group(required=True)
     remove_group.add_argument('-f', '--file')
     remove_group.add_argument('-m', '--match')
-    remove_group.add_argument('-s', '--series')
 
     # "get" command
     get = subparsers.add_parser(CMD_GET)

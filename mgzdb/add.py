@@ -35,7 +35,7 @@ COMPRESSED_EXT = '.mgc'
 
 def add_file(
         store_host, store_path, rec_path, source, reference,
-        series=None, challonge_id=None, platform_id=None,
+        series=None, series_id=None, platform_id=None,
         platform_match_id=None, played=None, ladder=None,
         user_data=None
     ):
@@ -46,7 +46,7 @@ def add_file(
     try:
         return obj.add_file(
             rec_path, source, reference, series_name=series,
-            challonge_id=challonge_id, platform_id=platform_id,
+            series_id=series_id, platform_id=platform_id,
             platform_match_id=platform_match_id, played=played,
             ladder=ladder, user_data=user_data
         )
@@ -68,7 +68,7 @@ class AddFile:
 
     def add_file( # pylint: disable=too-many-return-statements
             self, rec_path, source, reference, series_name=None,
-            challonge_id=None, platform_id=None, platform_match_id=None,
+            series_id=None, platform_id=None, platform_match_id=None,
             played=None, ladder=None, user_data=None
     ):
         """Add a single mgz file."""
@@ -120,7 +120,7 @@ class AddFile:
             try:
                 match = self._add_match(
                     summary, played, match_hash, user_data, series_name,
-                    challonge_id, platform_id, platform_match_id, ladder
+                    series_id, platform_id, platform_match_id, ladder
                 )
                 if not match:
                     return False
@@ -154,7 +154,7 @@ class AddFile:
 
     def _add_match( # pylint: disable=too-many-branches
             self, summary, played, match_hash, user_data,
-            series_name=None, challonge_id=None, platform_id=None,
+            series_name=None, series_id=None, platform_id=None,
             platform_match_id=None, ladder=None
     ):
         """Add a match."""
@@ -222,11 +222,11 @@ class AddFile:
                          log_id, dataset_data['id'], dataset_data['name'])
             return False
 
-        if challonge_id and series_name:
-            series = self.session.query(Series).get(challonge_id)
+        if series_id and series_name:
+            series = self.session.query(Series).get(series_id)
             series_metadata = self.session.query(SeriesMetadata) \
                 .filter(SeriesMetadata.name == series_name) \
-                .filter(SeriesMetadata.series_id == challonge_id) \
+                .filter(SeriesMetadata.series_id == series_id) \
                 .one_or_none()
             if not series_metadata:
                 series_metadata = SeriesMetadata(name=series_name, series=series)
@@ -284,24 +284,17 @@ class AddFile:
             castle_time = data['achievements']['technology']['castle_time']
             imperial_time = data['achievements']['technology']['imperial_time']
             self._get_unique(
-                    Team,
-                    ['match', 'team_id'],
-                    winner=(team_id == winning_team_id),
-                    match=match,
-                    team_id=team_id
-                )
+                Team,
+                ['match', 'team_id'],
+                winner=(team_id == winning_team_id),
+                match=match,
+                team_id=team_id
+            )
             player = self._get_unique(
                 Player,
                 ['match_id', 'number'],
                 civilization_id=int(data['civilization']),
                 team_id=team_id,
-                #team=self._get_unique(
-                #    Team,
-                #    ['match', 'team_id'],
-                #    winner=(team_id == winning_team_id),
-                #    match=match,
-                #    team_id=team_id
-                #),
                 match_id=match.id,
                 dataset=dataset,
                 platform_id=platform_id,
@@ -366,7 +359,6 @@ class AddFile:
                 self._get_unique(User, ['id', 'platform_id'], id=str(user['id']), platform_id=platform_id)
                 player.user_id = str(user['id'])
                 player.platform_id = platform_id
-                #player.user = self._get_unique(User, ['id', 'platform_id'], id=str(user['id']), platform_id=platform_id)
                 player.rate_before = user.get('rate_before')
                 player.rate_after = user.get('rate_after')
                 if not player.rate_snapshot:
