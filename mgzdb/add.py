@@ -20,7 +20,7 @@ import mgz.summary
 from aocref.model import Series, Dataset
 from mgzdb.platforms import PLATFORM_VOOBLY, VOOBLY_PLATFORMS
 from mgzdb.schema import (
-    Match, Tag, SeriesMetadata, File,
+    Match, SeriesMetadata, File,
     Source, Ladder, Player, Map,
     Team, User
 )
@@ -34,10 +34,10 @@ COMPRESSED_EXT = '.mgc'
 
 
 def add_file(
-        store_host, store_path, rec_path, source, reference, tags,
+        store_host, store_path, rec_path, source, reference,
         series=None, challonge_id=None, platform_id=None,
         platform_match_id=None, played=None, ladder=None,
-        force=False, user_data=None
+        user_data=None
     ):
     """Wrapper around AddFile class for parallelization."""
     obj = AddFile(
@@ -45,10 +45,10 @@ def add_file(
     )
     try:
         return obj.add_file(
-            rec_path, source, reference, tags, series_name=series,
+            rec_path, source, reference, series_name=series,
             challonge_id=challonge_id, platform_id=platform_id,
             platform_match_id=platform_match_id, played=played,
-            ladder=ladder, force=force, user_data=user_data
+            ladder=ladder, user_data=user_data
         )
     except KeyboardInterrupt:
         sys.exit()
@@ -67,9 +67,9 @@ class AddFile:
         self.aoe2map = connections['aoe2map']
 
     def add_file( # pylint: disable=too-many-return-statements
-            self, rec_path, source, reference, tags, series_name=None,
+            self, rec_path, source, reference, series_name=None,
             challonge_id=None, platform_id=None, platform_match_id=None,
-            played=None, ladder=None, force=False, user_data=None
+            played=None, ladder=None, user_data=None
     ):
         """Add a single mgz file."""
         start = time.time()
@@ -119,17 +119,17 @@ class AddFile:
                 played = parse_filename_timestamp(original_filename)
             try:
                 match = self._add_match(
-                    summary, played, tags, match_hash, user_data, series_name,
-                    challonge_id, platform_id, platform_match_id, ladder, force
+                    summary, played, match_hash, user_data, series_name,
+                    challonge_id, platform_id, platform_match_id, ladder
                 )
                 if not match:
                     return False
+                self._update_match_users(platform_id, match.id, user_data)
             except IntegrityError:
                 LOGGER.error("[f:%s] constraint violation: could not add match", log_id)
                 return False
 
         compressed_filename, compressed_size = self._handle_file(file_hash, data)
-        self._update_match_users(platform_id, match.id, user_data)
 
         new_file = self._get_unique(
             File, ['hash'],
@@ -153,9 +153,9 @@ class AddFile:
         return True
 
     def _add_match( # pylint: disable=too-many-branches
-            self, summary, played, tags, match_hash, user_data,
+            self, summary, played, match_hash, user_data,
             series_name=None, challonge_id=None, platform_id=None,
-            platform_match_id=None, ladder=None, force=False
+            platform_match_id=None, ladder=None
     ):
         """Add a match."""
         postgame = summary.get_postgame()
@@ -193,10 +193,8 @@ class AddFile:
             flagged = True
 
         if flagged:
-            if not force:
-                LOGGER.error("[m:%s] skipping add", log_id)
-                return False
-            LOGGER.warning("[m:%s] adding it anyway", log_id)
+            LOGGER.error("[m:%s] skipping add", log_id)
+            return False
 
         if user_data and len(players) != len(user_data):
             LOGGER.error("[m:%s] has mismatched user data", log_id)
@@ -285,17 +283,25 @@ class AddFile:
             feudal_time = data['achievements']['technology']['feudal_time']
             castle_time = data['achievements']['technology']['castle_time']
             imperial_time = data['achievements']['technology']['imperial_time']
-            player = self._get_unique(
-                Player,
-                ['match_id', 'number'],
-                civilization_id=int(data['civilization']),
-                team=self._get_unique(
+            self._get_unique(
                     Team,
                     ['match', 'team_id'],
                     winner=(team_id == winning_team_id),
                     match=match,
                     team_id=team_id
-                ),
+                )
+            player = self._get_unique(
+                Player,
+                ['match_id', 'number'],
+                civilization_id=int(data['civilization']),
+                team_id=team_id,
+                #team=self._get_unique(
+                #    Team,
+                #    ['match', 'team_id'],
+                #    winner=(team_id == winning_team_id),
+                #    match=match,
+                #    team_id=team_id
+                #),
                 match_id=match.id,
                 dataset=dataset,
                 platform_id=platform_id,
@@ -342,15 +348,8 @@ class AddFile:
             if match.platform_id == PLATFORM_VOOBLY and not user_data:
                 self._guess_match_user(player, data['name'])
 
-        if tags:
-            self._add_tags(match, tags)
         match.winning_team_id = winning_team_id
         return match
-
-    def _add_tags(self, match, tags):
-        """Add tags to a match."""
-        for tag in tags:
-            self._get_unique(Tag, name=tag, match=match)
 
     def _update_match_users(self, platform_id, match_id, user_data):
         """Update Voobly User info on Match."""
@@ -364,7 +363,10 @@ class AddFile:
                     continue
                 LOGGER.info("[m:%s] updating platform user data for p%d",
                             player.match.hash[:LOG_ID_LENGTH], user['color_id'] + 1)
-                player.user = self._get_unique(User, ['id', 'platform_id'], id=user['id'], platform_id=platform_id)
+                self._get_unique(User, ['id', 'platform_id'], id=str(user['id']), platform_id=platform_id)
+                player.user_id = str(user['id'])
+                player.platform_id = platform_id
+                #player.user = self._get_unique(User, ['id', 'platform_id'], id=str(user['id']), platform_id=platform_id)
                 player.rate_before = user.get('rate_before')
                 player.rate_after = user.get('rate_after')
                 if not player.rate_snapshot:

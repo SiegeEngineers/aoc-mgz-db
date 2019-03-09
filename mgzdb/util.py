@@ -80,3 +80,8 @@ def get_store(store_host, port=22, username=None):
             store_host = parts[1]
     ssh.connect(store_host, port=port, username=username)
     return ssh
+
+
+def get_utc_now():
+    """Get current timestamp."""
+    return datetime.utcnow()

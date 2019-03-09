@@ -13,7 +13,6 @@ from mgzdb.util import parse_series_path
 CMD_QUERY = 'query'
 CMD_ADD = 'add'
 CMD_REMOVE = 'remove'
-CMD_TAG = 'tag'
 CMD_GET = 'get'
 CMD_RESET = 'reset'
 CMD_BOOTSTRAP = 'bootstrap'
@@ -53,14 +52,14 @@ def main(args): # pylint: disable=too-many-branches
         # File
         if args.subcmd == SUBCMD_FILE:
             for rec in args.rec_path:
-                db_api.add_file(rec, args.source, None, args.tags, force=args.force)
+                db_api.add_file(rec, args.source, None)
                 if args.progress:
                     progress.total = db_api.total
 
         # Match
         elif args.subcmd == SUBCMD_MATCH:
             for url in args.url:
-                db_api.add_match(args.platform, url, args.tags, force=args.force)
+                db_api.add_match(args.platform, url)
                 if args.progress:
                     progress.total = db_api.total
 
@@ -69,7 +68,7 @@ def main(args): # pylint: disable=too-many-branches
             for path in args.zip_path:
                 series, challonge_id = parse_series_path(path)
                 db_api.add_series(
-                    path, args.tags, series, challonge_id, force=args.force
+                    path, args.tags, series, challonge_id
                 )
                 if args.progress:
                     progress.total = db_api.total
@@ -77,7 +76,7 @@ def main(args): # pylint: disable=too-many-branches
         # Database
         elif args.subcmd == SUBCMD_DB:
             remote_api = API(args.remote_db_url, args.remote_store_host, args.remote_store_path)
-            db_api.add_db(remote_api, args.tags, force=args.force)
+            db_api.add_db(remote_api)
             if args.progress:
                 progress.total = db_api.total
 
@@ -94,10 +93,6 @@ def main(args): # pylint: disable=too-many-branches
     # Remove
     elif args.cmd == CMD_REMOVE:
         db_api.remove(file_id=args.file, match_id=args.match, series_id=args.series)
-
-    # Tag
-    elif args.cmd == CMD_TAG:
-        db_api.tag(args.match, args.tags)
 
     # Query
     elif args.cmd == CMD_QUERY:
@@ -119,9 +114,6 @@ def main(args): # pylint: disable=too-many-branches
         if input('reset database completely? [y/N] ') == 'y':
             db_api.reset()
 
-    # Bootstrap
-    elif args.cmd == CMD_BOOTSTRAP:
-        db_api.bootstrap()
 
 def setup():
     """Setup CLI."""
@@ -173,8 +165,6 @@ def setup():
 
     # "add" command
     add = subparsers.add_parser(CMD_ADD)
-    add.add_argument('-f', '--force', action='store_true', default=False)
-    add.add_argument('-t', '--tags', nargs='+')
 
     # "add" subcommands
     add_subparsers = add.add_subparsers(dest='subcmd')
@@ -212,11 +202,6 @@ def setup():
     remove_group.add_argument('-f', '--file')
     remove_group.add_argument('-m', '--match')
     remove_group.add_argument('-s', '--series')
-
-    # "tag" command
-    tag = subparsers.add_parser(CMD_TAG)
-    tag.add_argument('match')
-    tag.add_argument('tags', nargs='+')
 
     # "get" command
     get = subparsers.add_parser(CMD_GET)

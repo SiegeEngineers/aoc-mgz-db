@@ -1,20 +1,16 @@
 """MGZ database schema."""
 
-from datetime import datetime
 from sqlalchemy import (
     create_engine, Boolean, DateTime, Column,
     ForeignKey, Integer, Interval, String, Float
 )
 from sqlalchemy.orm import relationship, sessionmaker, backref
-from sqlalchemy.schema import ForeignKeyConstraint
+from sqlalchemy.schema import ForeignKeyConstraint, UniqueConstraint
 
 from aocref.bootstrap import bootstrap
 from aocref.model import BASE
 
-
-def get_utc_now():
-    """Get current timestamp."""
-    return datetime.utcnow()
+from mgzdb.util import get_utc_now
 
 
 def get_session(url):
@@ -32,12 +28,6 @@ def reset(url):
     bootstrap(session)
 
 
-def bootstrap_db(url):
-    """Bootstrap database."""
-    session, _ = get_session(url)
-    bootstrap(session)
-
-
 class File(BASE):
     """Represent File."""
     __tablename__ = 'files'
@@ -52,24 +42,15 @@ class File(BASE):
     size = Column(Integer, nullable=False)
     compressed_size = Column(Integer, nullable=False)
     owner_number = Column(Integer, nullable=False)
-    owner = relationship('Player', primaryjoin='and_(File.match_id==Player.match_id, ' \
-                                                    'foreign(File.owner_number)==Player.number)')
+    owner = relationship('Player', foreign_keys=[match_id, owner_number], viewonly=True)
     source_id = Column(Integer, ForeignKey('sources.id'))
     source = relationship('Source', foreign_keys=[source_id])
     reference = Column(String)
     added = Column(DateTime, default=get_utc_now)
     parser_version = Column(String, nullable=False)
-
-
-class Team(BASE):
-    """Represent a team."""
-    __tablename__ = 'teams'
-    team_id = Column(Integer, primary_key=True)
-    match_id = Column(Integer, ForeignKey('matches.id'), primary_key=True)
-    winner = Column(Boolean)
-    match = relationship('Match', foreign_keys=match_id)
-    members = relationship('Player', primaryjoin='and_(Team.match_id==Player.match_id, ' \
-                                                 'Team.team_id==Player.team_id)')
+    __table_args__ = (
+        ForeignKeyConstraint(['match_id', 'owner_number'], ['players.match_id', 'players.number']),
+    )
 
 
 class Match(BASE):
@@ -87,9 +68,8 @@ class Match(BASE):
     dataset = relationship('Dataset', foreign_keys=dataset_id)
     platform_id = Column(String, ForeignKey('platforms.id'))
     platform = relationship('Platform', foreign_keys=platform_id)
-    ladder_id = Column(Integer, ForeignKey('ladders.id'))
-    ladder = relationship('Ladder', primaryjoin='and_(foreign(Match.platform_id)==Ladder.platform_id, ' \
-                                                'foreign(Match.ladder_id)==Ladder.id)')
+    ladder_id = Column(Integer)
+    ladder = relationship('Ladder', foreign_keys=[ladder_id, platform_id], viewonly=True)
     rated = Column(Boolean)
     players = relationship('Player', back_populates='match', cascade='all, delete-orphan')
     teams = relationship('Team', foreign_keys='Team.match_id', cascade='all, delete-orphan')
@@ -105,7 +85,6 @@ class Match(BASE):
     played = Column(DateTime)
     added = Column(DateTime, default=get_utc_now)
     platform_match_id = Column(Integer, unique=True)
-    tags = relationship('Tag', foreign_keys='Tag.match_id', cascade='all, delete-orphan')
     duration = Column(Interval)
     completed = Column(Boolean)
     restored = Column(Boolean)
@@ -127,29 +106,38 @@ class Match(BASE):
     all_technologies = Column(Boolean)
     lock_speed = Column(Boolean)
     multiqueue = Column(Boolean)
+    __table_args__ = (
+        ForeignKeyConstraint(['ladder_id', 'platform_id'], ['ladders.id', 'ladders.platform_id']),
+    )
+
+
+class Team(BASE):
+    """Represent a team."""
+    __tablename__ = 'teams'
+    team_id = Column(Integer, primary_key=True)
+    match_id = Column(Integer, ForeignKey('matches.id'), primary_key=True)
+    winner = Column(Boolean)
+    match = relationship('Match', foreign_keys=match_id)
 
 
 class Player(BASE):
     """Represent Player in a Match."""
     __tablename__ = 'players'
     match_id = Column(Integer, ForeignKey('matches.id'), primary_key=True)
+    name = Column(String, nullable=False)
     number = Column(Integer, nullable=False, primary_key=True)
     color_id = Column(Integer, nullable=False)
-
     platform_id = Column(String, ForeignKey('platforms.id'))
     platform = relationship('Platform', foreign_keys=platform_id)
-    user_id = Column(String, ForeignKey('users.id'))
-    user = relationship('User', primaryjoin='and_(Player.platform_id==User.platform_id, ' \
-                                                'foreign(Player.user_id)==User.id)')
-    name = Column(String, nullable=False)
-    match = relationship('Match', viewonly=True)
+    user_id = Column(String)
+    user = relationship('User', foreign_keys=[user_id, platform_id], viewonly=True)
+    match = relationship('Match', foreign_keys=[match_id], viewonly=True)
     team_id = Column(Integer)
-    team = relationship('Team')
+    team = relationship('Team', foreign_keys=[match_id, team_id], backref='members', viewonly=True)
     dataset_id = Column(Integer, ForeignKey('datasets.id'))
     dataset = relationship('Dataset', foreign_keys=[dataset_id])
     civilization_id = Column(Integer)
-    civilization = relationship('Civilization', backref='players', primaryjoin='and_(Player.dataset_id==Civilization.dataset_id, ' \
-                                                          'foreign(Player.civilization_id)==Civilization.id)')
+    civilization = relationship('Civilization', foreign_keys=[dataset_id, civilization_id], backref='players', viewonly=True)
     start_x = Column(Integer)
     start_y = Column(Integer)
     human = Column(Boolean)
@@ -190,7 +178,8 @@ class Player(BASE):
     villager_high = Column(Integer)
     __table_args__ = (
         ForeignKeyConstraint(['match_id', 'team_id'], ['teams.match_id', 'teams.team_id']),
-        ForeignKeyConstraint(['civilization_id', 'dataset_id'], ['civilizations.id', 'civilizations.dataset_id'])
+        ForeignKeyConstraint(['civilization_id', 'dataset_id'], ['civilizations.id', 'civilizations.dataset_id']),
+        ForeignKeyConstraint(['user_id', 'platform_id'], ['users.id', 'users.platform_id'])
     )
 
 
@@ -199,21 +188,15 @@ class User(BASE):
     __tablename__ = 'users'
     id = Column(String, primary_key=True)
     platform_id = Column(String, ForeignKey('platforms.id'), primary_key=True)
-
+    __table_args__ = (
+        UniqueConstraint('id', 'platform_id'),
+    )
 
 class Source(BASE):
     """Represents File Source."""
     __tablename__ = 'sources'
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
-
-
-class Tag(BASE):
-    """Tag."""
-    __tablename__ = 'tags'
-    name = Column(String, primary_key=True)
-    match_id = Column(Integer, ForeignKey('matches.id'), primary_key=True)
-    match = relationship('Match', foreign_keys=match_id)
 
 
 class Ladder(BASE):

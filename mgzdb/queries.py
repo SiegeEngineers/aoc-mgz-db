@@ -4,7 +4,7 @@ import logging
 from sqlalchemy import func
 from aocref.model import Series, Dataset, Civilization
 from mgzdb.schema import (
-    File, Match, Source, Map, User, Tag
+    File, Match, Source, Map, User
 )
 
 
@@ -29,12 +29,11 @@ def get_summary(session):
         'series': session.query(Series).count(),
         #'ladders': _group_by_relation(session, VooblyLadder.name, Match, Match.voobly_ladder_id),
         'sources': _group_by_relation(session, Source.name, File, File.source_id),
-        'tags': session.query(Tag).count(),
-        'mods': _group_by_relation(session, Dataset.name, Match, Match.dataset_id),
+        'datasets': _group_by_relation(session, Dataset.name, Match, Match.dataset_id),
         'civilizations': session.query(Civilization).count(),
         'maps': session.query(Map).count(),
         'versions': _group_by(session, Match.version),
-        'users': session.query(User).count(),
+        'users': _group_by(session, User.platform_id) #session.query(User).count(),
     }
 
 
@@ -50,7 +49,7 @@ def get_file(session, file_id):
         'original': mgz.original_filename,
         'owner': {
             'name': mgz.owner.name,
-            'voobly_id': mgz.owner.voobly_user.id if mgz.owner.voobly_user else None
+            'user_id': mgz.owner.user.id if mgz.owner.user else None
         },
         'source': mgz.source.name,
         'reference': mgz.reference,
@@ -88,14 +87,15 @@ def get_match(session, match_id):
         return None
     return {
         'match_id': match_id,
-        'voobly_id': match.voobly_id,
+        'platform_id': match.platform_id,
+        'platform_match_id': match.platform_match_id,
         'played': str(match.played),
         'files': [{
             'filename': f.filename,
             'original': f.original_filename,
             'owner': {
                 'name': f.owner.name,
-                'voobly_id': f.owner.voobly_user.id if f.owner.voobly_user else None
+                'user_id': f.owner.user.id if f.owner.user else None
             },
             'source': f.source.name,
             'reference': f.reference,
@@ -104,16 +104,15 @@ def get_match(session, match_id):
         'series': {
             'name': match.series.name if match.series else None
         },
-        'tags': [t.name for t in match.tags],
         'version': {
             'major': match.version,
             'minor': match.minor_version,
-            'mod': {
-                'name': match.mod.name,
-                'version': match.mod_version
-            } if match.mod else None
+            'dataset': {
+                'name': match.dataset.name,
+                'version': match.dataset_version
+            } if match.dataset else None
         },
-        'ladder': match.voobly_ladder.name if match.voobly_ladder else None,
+        #'ladder': match.voobly_ladder.name if match.voobly_ladder else None,
         'map': {
             'name': match.map.name,
             'size': match.map_size
@@ -125,8 +124,7 @@ def get_match(session, match_id):
         'players': [{
             'name': p.name,
             'number': p.number,
-            'voobly_id': p.voobly_user.id if p.voobly_user else None,
-            'voobly_clan': p.voobly_clan.id if p.voobly_clan else None,
+            'user_id': p.user.id if p.user else None,
             'civilization': p.civilization.name,
             'human': p.human,
             'score': p.score,

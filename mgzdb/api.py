@@ -17,7 +17,7 @@ from aocref.model import Series
 from mgzdb import queries, platforms
 from mgzdb.add import add_file
 from mgzdb.compress import decompress
-from mgzdb.schema import get_session, reset, bootstrap_db, Tag, File, Match
+from mgzdb.schema import get_session, reset, File, Match
 from mgzdb.util import get_store, fetch_file
 
 
@@ -113,7 +113,7 @@ class API: # pylint: disable=too-many-instance-attributes
                 error_callback=self._critical_error
             )
 
-    def add_match(self, platform, url, tags, force=False, single_pov=False):
+    def add_match(self, platform, url, single_pov=False):
         """Add a match via platform url."""
         if isinstance(url, str):
             match_id = url.split('/')[-1]
@@ -142,16 +142,14 @@ class API: # pylint: disable=too-many-instance-attributes
                 os.path.join(self.temp_dir.name, filename),
                 platform,
                 url,
-                tags,
                 platform_id=platform,
                 platform_match_id=match_id,
                 played=match['timestamp'],
                 ladder=match.get('ladder'),
-                force=force,
                 user_data=match['players']
             )
 
-    def add_series(self, zip_path, tags, series=None, challonge_id=None, force=False):
+    def add_series(self, zip_path, series=None, challonge_id=None):
         """Add a series via zip file."""
         with zipfile.ZipFile(zip_path) as series_zip:
             LOGGER.info("[%s] opened archive", os.path.basename(zip_path))
@@ -164,14 +162,12 @@ class API: # pylint: disable=too-many-instance-attributes
                     os.path.join(self.temp_dir.name, filename),
                     SOURCE_ZIP,
                     os.path.basename(zip_path),
-                    tags,
                     series,
-                    challonge_id,
-                    force=force
+                    challonge_id
                 )
             LOGGER.info("[%s] finished", os.path.basename(zip_path))
 
-    def add_db(self, remote, tags, force=False):
+    def add_db(self, remote):
         """Add records from another database."""
         for match in remote.session.query(Match).all():
             for mgz in match.files:
@@ -185,14 +181,12 @@ class API: # pylint: disable=too-many-instance-attributes
                     path,
                     SOURCE_DB,
                     mgz.id,
-                    tags,
                     series,
                     challonge_id=challonge_id,
                     platform_id=match.platform_id,
                     platform_match_id=match.platform_match_id,
                     played=match.played,
                     ladder=match.ladder.name if match.ladder else None,
-                    force=force,
                     user_data=[{
                         'id': mgz.owner.voobly_user_id,
                         'clan': mgz.owner.voobly_clan_id,
@@ -226,7 +220,6 @@ class API: # pylint: disable=too-many-instance-attributes
                             mgz_path,
                             SOURCE_ARCHIVE,
                             mgz,
-                            None, # tags
                             None, # series
                             platform_id=platform,
                             platform_match_id=int(match_id),
@@ -253,17 +246,6 @@ class API: # pylint: disable=too-many-instance-attributes
         else:
             print('not found')
 
-    def tag(self, match_id, tags):
-        """Tag a match."""
-        match = self.session.query(Match).get(match_id)
-        for tag in tags:
-            try:
-                obj = Tag(name=tag, match=match)
-                self.session.add(obj)
-                self.session.commit()
-            except IntegrityError:
-                self.session.rollback()
-
     def get(self, file_id):
         """Get a file from the store."""
         if not self.store:
@@ -276,11 +258,6 @@ class API: # pylint: disable=too-many-instance-attributes
         """Reset database."""
         reset(self.db_path)
         LOGGER.info("reset database")
-
-    def bootstrap(self):
-        """Bootstrap database."""
-        bootstrap_db(self.db_path)
-        LOGGER.info("bootstrapped database")
 
     def query(self, query_type, **kwargs):
         """Query database."""
