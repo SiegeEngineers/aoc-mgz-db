@@ -6,14 +6,14 @@ Store and query recorded game metadata.
 
 ## Features
 
-- Add by file, match, series, or csv (in parallel)
-- Tag matches
-- Supplement with Voobly player data
+- Add by file, match, series, or bulk
+- Supplement with platform player data
 - Detect duplicates
 - Detect player perspectives of the same match
 - Detect incomplete matches
 - CLI and API
 - Compresses stored files (~5% of original size)
+- Support for Voobly, Voobly China, and QQ AoC
 
 # Setup
 
@@ -41,13 +41,19 @@ Optional:
 
 # Examples
 
+## Initialize
+
+```bash
+mgzdb reset
+```
+
 ## Adding
 
 ```bash
 mgzdb add file rec.20181026-164339.mgz
-mgzdb add match https://www.voobly.com/match/view/18916420
+mgzdb add match voobly 18916420
+mgzdb add match qq 47851
 mgzdb add series "135406198-NAC2Q1 GrandFinal F1Re vs BacT.zip"
-mgzdb add csv matchDump.csv
 ```
 
 When adding a series, the filename is used as the series name. Optionally prepend the name with a Challonge match ID.
@@ -67,10 +73,4 @@ mgzdb query summary
 mgzdb remove --file 1
 mgzdb remove --match 1
 mgzdb remove --series 1
-```
-
-## Tagging
-
-```bash
-mgzdb tag 1 drush
 ```
