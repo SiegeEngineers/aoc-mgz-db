@@ -169,7 +169,7 @@ class AddFile:
         if from_voobly:
             platform_id = PLATFORM_VOOBLY
         settings = summary.get_settings()
-        map_name, map_size, map_seed, _ = summary.get_map()
+        map_name, _, map_dimension, map_seed, _ = summary.get_map()
         completed = summary.get_completed()
         restored, _ = summary.get_restored()
         has_postgame = bool(postgame)
@@ -247,22 +247,22 @@ class AddFile:
             ladder=ladder,
             rated=rated,
             map=self._get_unique(Map, name=map_name),
-            map_size=map_size,
+            map_size_id=map_dimension,
             map_seed=map_seed,
             duration=timedelta(milliseconds=duration),
             completed=completed,
             restored=restored,
             postgame=has_postgame,
-            type=settings['type'],
-            difficulty=settings['difficulty'],
+            type_id=settings['type'][0],
+            difficulty_id=settings['difficulty'][0],
             population_limit=settings['population_limit'],
-            reveal_map=settings['reveal_map'],
-            speed=settings['speed'],
+            map_reveal_choice_id=settings['map_reveal_choice'][0],
+            speed_id=settings['speed'][0],
             cheats=settings['cheats'],
             lock_teams=settings['lock_teams'],
-            starting_resources=settings['starting_resources'],
-            starting_age=settings['starting_age'],
-            victory_condition=settings['victory_condition'],
+            starting_resources_id=settings['starting_resources'][0],
+            starting_age_id=settings['starting_age'][0],
+            victory_condition_id=settings['victory_condition'][0],
             team_together=settings['team_together'],
             all_technologies=settings['all_technologies'],
             lock_speed=settings['lock_speed'],
