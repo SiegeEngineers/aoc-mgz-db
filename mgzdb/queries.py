@@ -4,7 +4,7 @@ import logging
 from sqlalchemy import func
 from aocref.model import Series, Dataset, Civilization
 from mgzdb.schema import (
-    File, Match, Source, Map, User
+    File, Match, Source, User
 )
 
 
@@ -27,13 +27,12 @@ def get_summary(session):
         'files': session.query(File).count(),
         'matches': session.query(Match).count(),
         'series': session.query(Series).count(),
-        #'ladders': _group_by_relation(session, VooblyLadder.name, Match, Match.voobly_ladder_id),
         'sources': _group_by_relation(session, Source.name, File, File.source_id),
         'datasets': _group_by_relation(session, Dataset.name, Match, Match.dataset_id),
         'civilizations': session.query(Civilization).count(),
-        'maps': session.query(Map).count(),
+        'maps': _group_by(session, Match.map_name),
         'versions': _group_by(session, Match.version),
-        'users': _group_by(session, User.platform_id) #session.query(User).count(),
+        'users': session.query(User).count()
     }
 
 
@@ -112,7 +111,6 @@ def get_match(session, match_id):
                 'version': match.dataset_version
             } if match.dataset else None
         },
-        #'ladder': match.voobly_ladder.name if match.voobly_ladder else None,
         'map': {
             'name': match.map.name,
             'size': match.map_size

@@ -59,7 +59,11 @@ class Match(BASE):
     id = Column(Integer, primary_key=True)
     hash = Column(String, unique=True)
     series_id = Column(String, ForeignKey('series.id'))
+    tournament_id = Column(String, ForeignKey('tournaments.id'))
+    event_id = Column(String, ForeignKey('events.id'))
     series = relationship('Series', foreign_keys=series_id, backref='matches')
+    tournament = relationship('Tournament', foreign_keys=tournament_id, backref='matches')
+    event = relationship('Event', foreign_keys=event_id, backref='matches')
     files = relationship('File', foreign_keys='File.match_id', cascade='all, delete-orphan')
     version = Column(String)
     minor_version = Column(String)
@@ -78,11 +82,20 @@ class Match(BASE):
                                                       'Player.team_id==Match.winning_team_id)')
     losers = relationship('Player', primaryjoin='and_(Player.match_id==Match.id, ' \
                                                 'Player.team_id!=Match.winning_team_id)')
-    map_id = Column(Integer, ForeignKey('maps.id'))
-    map = relationship('Map', foreign_keys=[map_id])
+    builtin_map_id = Column(Integer)
+    builtin_map = relationship('Map', foreign_keys=[builtin_map_id, dataset_id], backref='matches', viewonly=True)
     map_size_id = Column(Integer, ForeignKey('map_sizes.id'))
     map_size = relationship('MapSize', foreign_keys=map_size_id)
-    map_seed = Column(Integer)
+    map_name = Column(String, index=True)
+    event_map_id = Column(Integer, ForeignKey('event_maps.id'))
+    event_map = relationship('EventMap', foreign_keys=event_map_id, backref='matches')
+    rms_zr = Column(Boolean)
+    rms_custom = Column(Boolean)
+    rms_seed = Column(Integer)
+    guard_state = Column(Boolean)
+    fixed_positions = Column(Boolean)
+    direct_placement = Column(Boolean)
+    effect_quantity = Column(Boolean)
     played = Column(DateTime)
     added = Column(DateTime, default=get_utc_now)
     platform_match_id = Column(Integer, unique=True)
@@ -102,8 +115,8 @@ class Match(BASE):
     speed = relationship('Speed', foreign_keys=speed_id)
     lock_teams = Column(Boolean)
     mirror = Column(Boolean)
-    diplomacy_type = Column(String, nullable=False)
-    team_size = Column(String)
+    diplomacy_type = Column(String, nullable=False, index=True)
+    team_size = Column(String, index=True)
     starting_resources_id = Column(Integer, ForeignKey('starting_resources.id'))
     starting_resources = relationship('StartingResources', foreign_keys=starting_resources_id)
     starting_age_id = Column(Integer, ForeignKey('starting_ages.id'))
@@ -116,6 +129,7 @@ class Match(BASE):
     multiqueue = Column(Boolean)
     __table_args__ = (
         ForeignKeyConstraint(['ladder_id', 'platform_id'], ['ladders.id', 'ladders.platform_id']),
+        ForeignKeyConstraint(['builtin_map_id', 'dataset_id'], ['maps.id', 'maps.dataset_id'])
     )
 
 
@@ -224,10 +238,3 @@ class SeriesMetadata(BASE):
     series_id = Column(String, ForeignKey('series.id'))
     series = relationship('Series', foreign_keys=[series_id], backref=backref('metadata', uselist=False))
     name = Column(String)
-
-
-class Map(BASE):
-    """Represent Map."""
-    __tablename__ = 'maps'
-    id = Column(Integer, primary_key=True)
-    name = Column(String, unique=True, nullable=False)

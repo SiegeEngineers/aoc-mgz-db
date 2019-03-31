@@ -17,11 +17,10 @@ import voobly
 import mgz.const
 import mgz.summary
 
-from aocref.model import Series, Dataset
+from aocref.model import Series, Dataset, EventMap
 from mgzdb.platforms import PLATFORM_VOOBLY, VOOBLY_PLATFORMS
 from mgzdb.schema import (
-    Match, SeriesMetadata, File,
-    Source, Ladder, Player, Map,
+    Match, SeriesMetadata, File, Source, Ladder, Player,
     Team, User
 )
 from mgzdb.util import copy_file, parse_filename_timestamp
@@ -169,7 +168,7 @@ class AddFile:
         if from_voobly:
             platform_id = PLATFORM_VOOBLY
         settings = summary.get_settings()
-        map_name, _, map_dimension, map_seed, _ = summary.get_map()
+        map_data = summary.get_map()
         completed = summary.get_completed()
         restored, _ = summary.get_restored()
         has_postgame = bool(postgame)
@@ -222,17 +221,8 @@ class AddFile:
                          log_id, dataset_data['id'], dataset_data['name'])
             return False
 
-        if series_id and series_name:
-            series = self.session.query(Series).get(series_id)
-            series_metadata = self.session.query(SeriesMetadata) \
-                .filter(SeriesMetadata.name == series_name) \
-                .filter(SeriesMetadata.series_id == series_id) \
-                .one_or_none()
-            if not series_metadata:
-                series_metadata = SeriesMetadata(name=series_name, series=series)
-                self.session.add(series_metadata)
-        else:
-            series = None
+        series, tournament, event, event_map_id = self._handle_series(series_id, series_name, map_data, log_id)
+
         match = self._get_unique(
             Match, ['hash', 'platform_match_id'],
             platform_match_id=platform_match_id,
@@ -240,15 +230,25 @@ class AddFile:
             played=played,
             hash=match_hash,
             series=series,
+            tournament=tournament,
+            event=event,
             version=major_version,
             minor_version=minor_version,
             dataset=dataset,
             dataset_version=dataset_data['version'],
             ladder=ladder,
             rated=rated,
-            map=self._get_unique(Map, name=map_name),
-            map_size_id=map_dimension,
-            map_seed=map_seed,
+            builtin_map_id=map_data['id'],
+            event_map_id=event_map_id,
+            map_size_id=map_data['dimension'],
+            map_name=map_data['name'],
+            rms_seed=map_data['seed'],
+            rms_zr=map_data['zr'],
+            rms_custom=map_data['custom'],
+            guard_state=map_data['modes']['guard_state'],
+            direct_placement=map_data['modes']['direct_placement'],
+            effect_quantity=map_data['modes']['effect_quantity'],
+            fixed_positions=map_data['modes']['fixed_positions'],
             duration=timedelta(milliseconds=duration),
             completed=completed,
             restored=restored,
@@ -351,8 +351,8 @@ class AddFile:
                 try:
                     player = self.session.query(Player).filter_by(match_id=match_id, color_id=user['color_id']).one()
                 except NoResultFound:
-                    LOGGER.error("[m:%s] failed to find p%d to update platform user data",
-                                 player.match.hash[:LOG_ID_LENGTH], user['color_id'] + 1)
+                    LOGGER.error("failed to find p%d to update platform user data",
+                                 user['color_id'] + 1)
                     continue
                 LOGGER.info("[m:%s] updating platform user data for p%d",
                             player.match.hash[:LOG_ID_LENGTH], user['color_id'] + 1)
@@ -369,11 +369,47 @@ class AddFile:
         try:
             player.user = self._get_unique(
                 User, ['id', 'platform_id'],
-                id=self.platforms[PLATFORM_VOOBLY].find_user(name.lstrip('+')),
+                id=str(self.platforms[PLATFORM_VOOBLY].find_user(name.lstrip('+'))),
                 platform_id=PLATFORM_VOOBLY
             )
         except (voobly.VooblyError, requests.exceptions.ConnectionError) as error:
             LOGGER.warning("failed to lookup Voobly user: %s", error)
+
+    def _handle_series(self, series_id, series_name, map_data, log_id):
+        """Handle series-related tasks."""
+        if series_id and series_name:
+            series = self.session.query(Series).get(series_id)
+            series_metadata = self.session.query(SeriesMetadata) \
+                .filter(SeriesMetadata.name == series_name) \
+                .filter(SeriesMetadata.series_id == series_id) \
+                .one_or_none()
+            if not series_metadata:
+                series_metadata = SeriesMetadata(name=series_name, series=series)
+                self.session.add(series_metadata)
+            tournament = series.tournament
+            event = tournament.event
+            event_map = self.session.query(EventMap) \
+                .filter(EventMap.event_id == event.id) \
+                .filter(EventMap.name == map_data['name']) \
+                .one_or_none()
+            if event_map:
+                event_map_id = event_map.id
+            else:
+                event_map_id = None
+                LOGGER.warning("[m:%s] event map for %s not found: %s", log_id, event.id, map_data['name'])
+        else:
+            series = None
+            tournament = None
+            event = None
+            try:
+                event_map = self.session.query(EventMap) \
+                    .filter(EventMap.name == map_data['name']) \
+                    .one()
+                event_map_id = event_map.id
+                LOGGER.info("[m:%s] guessed event %s for map %s", log_id, event_map.event_id, map_data['name'])
+            except (NoResultFound, MultipleResultsFound):
+                event_map_id = None
+        return series, tournament, event, event_map_id
 
     def _handle_file(self, file_hash, data):
         """Handle file: compress and store."""
