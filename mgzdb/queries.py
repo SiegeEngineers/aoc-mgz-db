@@ -4,7 +4,7 @@ import logging
 from sqlalchemy import func
 from aocref.model import Series, Dataset, Civilization
 from mgzdb.schema import (
-    File, Match, Source, User
+    File, Match, Source, User, SeriesMetadata
 )
 
 
@@ -26,7 +26,7 @@ def get_summary(session):
     return {
         'files': session.query(File).count(),
         'matches': session.query(Match).count(),
-        'series': session.query(Series).count(),
+        'series': session.query(SeriesMetadata).count(),
         'sources': _group_by_relation(session, Source.name, File, File.source_id),
         'datasets': _group_by_relation(session, Dataset.name, Match, Match.dataset_id),
         'civilizations': session.query(Civilization).count(),

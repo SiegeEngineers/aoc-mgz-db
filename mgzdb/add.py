@@ -96,7 +96,12 @@ class AddFile:
             LOGGER.warning("[f:%s] file already exists", log_id)
             return False
 
-        summary.work()
+        try:
+            summary.work()
+        except RuntimeError:
+            LOGGER.error("[f:%s] failed to parse mgz", log_id)
+            return False
+
         encoding = summary.get_encoding()
         if encoding == 'unknown':
             LOGGER.warning("[f:%s] unknown file text encoding", log_id)
@@ -182,17 +187,12 @@ class AddFile:
         if platform_match_id:
             log_id += ':{}'.format(platform_match_id)
 
-        flagged = False
         if restored:
-            LOGGER.warning("[m:%s] is restored game", log_id)
-            flagged = True
+            LOGGER.error("[m:%s] is restored game", log_id)
+            return False
 
         if not completed:
-            LOGGER.warning("[m:%s] was not completed", log_id)
-            flagged = True
-
-        if flagged:
-            LOGGER.error("[m:%s] skipping add", log_id)
+            LOGGER.error("[m:%s] was not completed", log_id)
             return False
 
         if user_data and len(players) != len(user_data):
@@ -378,14 +378,17 @@ class AddFile:
     def _handle_series(self, series_id, series_name, map_data, log_id):
         """Handle series-related tasks."""
         if series_id and series_name:
-            series = self.session.query(Series).get(series_id)
-            series_metadata = self.session.query(SeriesMetadata) \
-                .filter(SeriesMetadata.name == series_name) \
-                .filter(SeriesMetadata.series_id == series_id) \
-                .one_or_none()
-            if not series_metadata:
+            self.session.begin_nested()
+            try:
+                series = self.session.query(Series).get(series_id)
+                series_metadata = self.session.query(SeriesMetadata) \
+                    .filter(SeriesMetadata.name == series_name) \
+                    .filter(SeriesMetadata.series_id == series_id) \
+                    .one()
+            except NoResultFound:
                 series_metadata = SeriesMetadata(name=series_name, series=series)
                 self.session.add(series_metadata)
+                self.session.commit()
             tournament = series.tournament
             event = tournament.event
             event_map = self.session.query(EventMap) \
