@@ -60,11 +60,14 @@ class VooblySession(PlatformSession):
 
     def download_rec(self, url, target):
         """Download a rec."""
-        return voobly.download_rec(self.session, url, target)
+        try:
+            return voobly.download_rec(self.session, url, target)
+        except voobly.VooblyError:
+            raise RuntimeError('could not get rec')
 
     def find_user(self, user_id):
         """Find a user."""
-        return voobly.find_user(self.session, user_id)
+        return voobly.find_user_anon(self.session, user_id)
 
     def get_ladder_matches(self, ladder_id, from_timestamp=None, limit=None):
         """Get ladder matches."""

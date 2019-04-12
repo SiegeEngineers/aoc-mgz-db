@@ -22,7 +22,6 @@ SUBCMD_SERIES = 'series'
 SUBCMD_SUMMARY = 'summary'
 SUBCMD_ARCHIVE = 'archive'
 SUBCMD_DB = 'db'
-DEFAULT_HOST = 'localhost'
 DEFAULT_DB = 'sqlite:///data.db'
 
 
@@ -36,7 +35,7 @@ def main(args): # pylint: disable=too-many-branches
         add_callback = progress.update
 
     db_api = API(
-        args.database, args.store_host, args.store_path,
+        args.database, args.store_path,
         voobly_key=args.voobly_key,
         voobly_username=args.voobly_username,
         voobly_password=args.voobly_password,
@@ -75,7 +74,7 @@ def main(args): # pylint: disable=too-many-branches
 
         # Database
         elif args.subcmd == SUBCMD_DB:
-            remote_api = API(args.remote_db_url, args.remote_store_host, args.remote_store_path)
+            remote_api = API(args.remote_db_url, args.remote_store_path)
             db_api.add_db(remote_api)
             if args.progress:
                 progress.total = db_api.total
@@ -129,7 +128,6 @@ def setup():
 
     # Global options
     parser.add_argument('-d', '--database', default=os.environ.get('MGZ_DB', DEFAULT_DB))
-    parser.add_argument('-sh', '--store-host', default=os.environ.get('MGZ_STORE_HOST', DEFAULT_HOST))
     parser.add_argument('-sp', '--store-path', default=os.environ.get('MGZ_STORE_PATH', default_file_path))
     parser.add_argument('-vk', '--voobly-key', default=os.environ.get('VOOBLY_KEY', None))
     parser.add_argument('-vu', '--voobly-username', default=os.environ.get('VOOBLY_USERNAME', None))
@@ -189,7 +187,6 @@ def setup():
     # "add database"
     add_db = add_subparsers.add_parser(SUBCMD_DB)
     add_db.add_argument('remote_db_url')
-    add_db.add_argument('remote_store_host')
     add_db.add_argument('remote_store_path')
 
     # "add archive"

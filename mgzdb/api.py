@@ -16,16 +16,10 @@ from mgzdb import queries, platforms
 from mgzdb.add import add_file
 from mgzdb.compress import decompress
 from mgzdb.schema import get_session, reset, File, Match
-from mgzdb.util import get_store, fetch_file
+from mgzdb.util import get_file
 
 
 LOGGER = logging.getLogger(__name__)
-SOURCE_PLATFORM = 'platform'
-SOURCE_ARCHIVE = 'archive'
-SOURCE_ZIP = 'zip'
-SOURCE_CLI = 'cli'
-SOURCE_CSV = 'csv'
-SOURCE_DB = 'db'
 QUERY_MATCH = 'match'
 QUERY_FILE = 'file'
 QUERY_SERIES = 'series'
@@ -35,14 +29,13 @@ QUERY_SUMMARY = 'summary'
 class API: # pylint: disable=too-many-instance-attributes
     """MGZ Database API."""
 
-    def __init__(self, db_path, store_host, store_path, consecutive=False, callback=None, **kwargs):
+    def __init__(self, db_path, store_path, consecutive=False, callback=None, **kwargs):
         """Initialize sessions."""
 
         self.session, _ = get_session(db_path)
-        self.process_args = (store_host, store_path)
+        self.process_args = (store_path,)
         self.temp_dir = tempfile.TemporaryDirectory()
         self.store = None
-        self.store_host = store_host
         self.store_path = store_path
         self.db_path = db_path
         self.callback = callback
@@ -64,7 +57,6 @@ class API: # pylint: disable=too-many-instance-attributes
         """Start child processes."""
         def init_worker(function):
             function.connections = {
-                'store': get_store(self.store_host),
                 'session': get_session(self.db_path)[0],
                 'aoe2map': requests_cache.CachedSession(backend='memory'),
                 'platforms': platforms.factory(
@@ -126,19 +118,25 @@ class API: # pylint: disable=too-many-instance-attributes
             LOGGER.error("not an aoc match: %s", match_id)
             return
         players = match['players']
+        chose = None
         if single_pov:
             for player in players:
                 if player['url']:
                     chose = player
                     break
+            if not chose:
+                return
             players = [chose]
         for player in players:
             if not player['url']:
                 continue
-            filename = self.platforms[platform].download_rec(player['url'], self.temp_dir.name)
+            try:
+                filename = self.platforms[platform].download_rec(player['url'], self.temp_dir.name)
+            except RuntimeError:
+                LOGGER.error("could not download valid rec: %s", match_id)
+                continue
             self.add_file(
                 os.path.join(self.temp_dir.name, filename),
-                platform,
                 url,
                 platform_id=platform,
                 platform_match_id=match_id,
@@ -158,7 +156,6 @@ class API: # pylint: disable=too-many-instance-attributes
                 LOGGER.info("[%s] processing member file %s", os.path.basename(zip_path), filename)
                 self.add_file(
                     os.path.join(self.temp_dir.name, filename),
-                    SOURCE_ZIP,
                     os.path.basename(zip_path),
                     series,
                     series_id
@@ -177,7 +174,6 @@ class API: # pylint: disable=too-many-instance-attributes
                 series_id = match.series.series_id if match.series else None
                 self.add_file(
                     path,
-                    SOURCE_DB,
                     mgz.id,
                     series,
                     series_id=series_id,
@@ -216,7 +212,6 @@ class API: # pylint: disable=too-many-instance-attributes
                         match = json.loads(open(os.path.join(match_path, 'metadata.json'), 'r').read())
                         self.add_file(
                             mgz_path,
-                            SOURCE_ARCHIVE,
                             mgz,
                             None, # series
                             platform_id=platform,
@@ -244,16 +239,17 @@ class API: # pylint: disable=too-many-instance-attributes
 
     def get(self, file_id):
         """Get a file from the store."""
-        if not self.store:
-            self.store = get_store(self.store_host)
         mgz_file = self.session.query(File).get(file_id)
-        store_path = os.path.join(self.store_path, mgz_file.filename)
-        return mgz_file.original_filename, decompress(fetch_file(self.store, store_path))
+        return mgz_file.original_filename, decompress(get_file(self.store_path, mgz_file.filename))
 
     def reset(self):
         """Reset database."""
         reset(self.db_path)
         LOGGER.info("reset database")
+
+    def search(self):
+        """Search database."""
+        return self.session.query(Match).all()
 
     def query(self, query_type, **kwargs):
         """Query database."""

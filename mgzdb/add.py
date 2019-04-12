@@ -20,10 +20,10 @@ import mgz.summary
 from aocref.model import Series, Dataset, EventMap
 from mgzdb.platforms import PLATFORM_VOOBLY, VOOBLY_PLATFORMS
 from mgzdb.schema import (
-    Match, SeriesMetadata, File, Source, Ladder, Player,
+    Match, SeriesMetadata, File, Ladder, Player,
     Team, User
 )
-from mgzdb.util import copy_file, parse_filename_timestamp
+from mgzdb.util import parse_filename_timestamp, save_file
 from mgzdb.compress import compress
 
 
@@ -33,18 +33,18 @@ COMPRESSED_EXT = '.mgc'
 
 
 def add_file(
-        store_host, store_path, rec_path, source, reference,
+        store_path, rec_path, reference,
         series=None, series_id=None, platform_id=None,
         platform_match_id=None, played=None, ladder=None,
         user_data=None
     ):
     """Wrapper around AddFile class for parallelization."""
     obj = AddFile(
-        add_file.connections, store_host, store_path # pylint: disable=no-member
+        add_file.connections, store_path # pylint: disable=no-member
     )
     try:
         return obj.add_file(
-            rec_path, source, reference, series_name=series,
+            rec_path, reference, series_name=series,
             series_id=series_id, platform_id=platform_id,
             platform_match_id=platform_match_id, played=played,
             ladder=ladder, user_data=user_data
@@ -56,17 +56,15 @@ def add_file(
 class AddFile:
     """Add file to MGZ Database."""
 
-    def __init__(self, connections, store_host, store_path):
+    def __init__(self, connections, store_path):
         """Initialize sessions."""
-        self.store_host = store_host
         self.store_path = store_path
-        self.store = connections['store']
         self.session = connections['session']
         self.platforms = connections['platforms']
         self.aoe2map = connections['aoe2map']
 
-    def add_file( # pylint: disable=too-many-return-statements
-            self, rec_path, source, reference, series_name=None,
+    def add_file( # pylint: disable=too-many-return-statements, too-many-branches
+            self, rec_path, reference, series_name=None,
             series_id=None, platform_id=None, platform_match_id=None,
             played=None, ladder=None, user_data=None
     ):
@@ -107,7 +105,12 @@ class AddFile:
             LOGGER.warning("[f:%s] unknown file text encoding", log_id)
             return False
 
-        match_hash = summary.get_hash().hexdigest()
+        match_hash_obj = summary.get_hash()
+        if not match_hash_obj:
+            LOGGER.error("f:%s] not enough data to calculate safe match hash", log_id)
+            return False
+        match_hash = match_hash_obj.hexdigest()
+
         try:
             where = (Match.hash == match_hash)
             if platform_match_id:
@@ -135,23 +138,27 @@ class AddFile:
 
         compressed_filename, compressed_size = self._handle_file(file_hash, data)
 
-        new_file = self._get_unique(
-            File, ['hash'],
-            filename=compressed_filename,
-            original_filename=original_filename,
-            hash=file_hash,
-            size=summary.size,
-            compressed_size=compressed_size,
-            encoding=encoding,
-            language=summary.get_language(),
-            reference=reference,
-            match=match,
-            source=self._get_unique(Source, name=source),
-            owner_number=summary.get_owner(),
-            parser_version=pkg_resources.get_distribution('mgz').version
-        )
-        self.session.add(new_file)
-        self.session.commit()
+        try:
+            new_file = self._get_unique(
+                File, ['hash'],
+                filename=compressed_filename,
+                original_filename=original_filename,
+                hash=file_hash,
+                size=summary.size,
+                compressed_size=compressed_size,
+                encoding=encoding,
+                language=summary.get_language(),
+                reference=reference,
+                match=match,
+                owner_number=summary.get_owner(),
+                parser_version=pkg_resources.get_distribution('mgz').version
+            )
+            self.session.add(new_file)
+            self.session.commit()
+        except RuntimeError:
+            LOGGER.error("[f:%s] unable to add file, likely hash collision", log_id)
+            return False
+
         LOGGER.info("[f:%s] add finished in %.2f seconds, file id: %d, match id: %d",
                     log_id, time.time() - start, new_file.id, match.id)
         return True
@@ -162,15 +169,20 @@ class AddFile:
             platform_match_id=None, ladder=None
     ):
         """Add a match."""
-        postgame = summary.get_postgame()
-        duration = summary.get_duration()
+        try:
+            postgame = summary.get_postgame()
+            duration = summary.get_duration()
+        except RuntimeError:
+            LOGGER.error("[m] failed to get duration")
+            return False
+
         rated = False
         from_voobly, ladder_name, rated, _ = summary.get_ladder()
         if ladder:
             rated = True
         if not ladder:
             ladder = ladder_name
-        if from_voobly:
+        if from_voobly and not platform_id:
             platform_id = PLATFORM_VOOBLY
         settings = summary.get_settings()
         map_data = summary.get_map()
@@ -210,9 +222,9 @@ class AddFile:
                     platform_id=platform_id, name=ladder
                 )
             except ValueError:
-                ladder = None
+                ladder_id = None
         else:
-            ladder = None
+            ladder_id = None
 
         try:
             dataset = self.session.query(Dataset).filter_by(id=dataset_data['id']).one()
@@ -222,6 +234,8 @@ class AddFile:
             return False
 
         series, tournament, event, event_map_id = self._handle_series(series_id, series_name, map_data, log_id)
+        if series:
+            played = series.played
 
         match = self._get_unique(
             Match, ['hash', 'platform_match_id'],
@@ -236,7 +250,7 @@ class AddFile:
             minor_version=minor_version,
             dataset=dataset,
             dataset_version=dataset_data['version'],
-            ladder=ladder,
+            ladder_id=ladder_id,
             rated=rated,
             builtin_map_id=map_data['id'],
             event_map_id=event_map_id,
@@ -367,60 +381,55 @@ class AddFile:
     def _guess_match_user(self, player, name):
         """Guess Voobly User from a player name."""
         try:
-            player.user = self._get_unique(
+            user_id = str(self.platforms[PLATFORM_VOOBLY].find_user(name.lstrip('+')))
+            self._get_unique(
                 User, ['id', 'platform_id'],
-                id=str(self.platforms[PLATFORM_VOOBLY].find_user(name.lstrip('+'))),
+                id=user_id,
                 platform_id=PLATFORM_VOOBLY
             )
+            player.user_id = user_id
         except (voobly.VooblyError, requests.exceptions.ConnectionError) as error:
             LOGGER.warning("failed to lookup Voobly user: %s", error)
 
     def _handle_series(self, series_id, series_name, map_data, log_id):
         """Handle series-related tasks."""
         if series_id and series_name:
-            self.session.begin_nested()
-            try:
-                series = self.session.query(Series).get(series_id)
-                series_metadata = self.session.query(SeriesMetadata) \
-                    .filter(SeriesMetadata.name == series_name) \
-                    .filter(SeriesMetadata.series_id == series_id) \
-                    .one()
-            except NoResultFound:
-                series_metadata = SeriesMetadata(name=series_name, series=series)
-                self.session.add(series_metadata)
-                self.session.commit()
-            tournament = series.tournament
-            event = tournament.event
-            event_map = self.session.query(EventMap) \
-                .filter(EventMap.event_id == event.id) \
-                .filter(EventMap.name == map_data['name']) \
-                .one_or_none()
-            if event_map:
-                event_map_id = event_map.id
-            else:
-                event_map_id = None
-                LOGGER.warning("[m:%s] event map for %s not found: %s", log_id, event.id, map_data['name'])
-        else:
-            series = None
-            tournament = None
-            event = None
-            try:
+            series = self.session.query(Series).get(series_id)
+            if series:
+                self._get_unique(
+                    SeriesMetadata,
+                    ['series_id'],
+                    name=series_name,
+                    series_id=series.id
+                )
+                tournament = series.tournament
+                event = tournament.event
                 event_map = self.session.query(EventMap) \
+                    .filter(EventMap.event_id == event.id) \
                     .filter(EventMap.name == map_data['name']) \
-                    .one()
-                event_map_id = event_map.id
-                LOGGER.info("[m:%s] guessed event %s for map %s", log_id, event_map.event_id, map_data['name'])
-            except (NoResultFound, MultipleResultsFound):
-                event_map_id = None
-        return series, tournament, event, event_map_id
+                    .one_or_none()
+                if event_map:
+                    event_map_id = event_map.id
+                else:
+                    event_map_id = None
+                    LOGGER.warning("[m:%s] event map for %s not found: %s", log_id, event.id, map_data['name'])
+                return series, tournament, event, event_map_id
+        try:
+            event_map = self.session.query(EventMap) \
+                .filter(EventMap.name == map_data['name']) \
+                .one()
+            event_map_id = event_map.id
+            LOGGER.info("[m:%s] guessed event %s for map %s", log_id, event_map.event_id, map_data['name'])
+        except (NoResultFound, MultipleResultsFound):
+            event_map_id = None
+        return None, None, None, event_map_id
 
     def _handle_file(self, file_hash, data):
         """Handle file: compress and store."""
         compressed_filename = '{}{}'.format(file_hash, COMPRESSED_EXT)
         compressed_data = compress(io.BytesIO(data))
-        new_path = os.path.join(self.store_path, compressed_filename)
-        copy_file(io.BytesIO(compressed_data), self.store, new_path)
-        LOGGER.info("[f:%s] copied to %s:%s", file_hash[:LOG_ID_LENGTH], self.store_host, new_path)
+        destination = save_file(compressed_data, self.store_path, compressed_filename)
+        LOGGER.info("[f:%s] copied to %s", file_hash[:LOG_ID_LENGTH], destination)
         return compressed_filename, len(compressed_data)
 
     def _get_by_keys(self, table, keys, **kwargs):
@@ -444,4 +453,7 @@ class AddFile:
                 return obj
             except IntegrityError:
                 self.session.rollback()
-                return self._get_by_keys(table, keys, **kwargs)
+                try:
+                    return self._get_by_keys(table, keys, **kwargs)
+                except NoResultFound:
+                    raise RuntimeError

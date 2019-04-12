@@ -32,7 +32,7 @@ class File(BASE):
     """Represent File."""
     __tablename__ = 'files'
     id = Column(Integer, primary_key=True)
-    match_id = Column(Integer, ForeignKey('matches.id'))
+    match_id = Column(Integer, ForeignKey('matches.id', ondelete='cascade'))
     match = relationship('Match', foreign_keys=[match_id])
     hash = Column(String, unique=True, nullable=False)
     filename = Column(String, nullable=False)
@@ -43,8 +43,6 @@ class File(BASE):
     compressed_size = Column(Integer, nullable=False)
     owner_number = Column(Integer, nullable=False)
     owner = relationship('Player', foreign_keys=[match_id, owner_number], viewonly=True)
-    source_id = Column(Integer, ForeignKey('sources.id'))
-    source = relationship('Source', foreign_keys=[source_id])
     reference = Column(String)
     added = Column(DateTime, default=get_utc_now)
     parser_version = Column(String, nullable=False)
@@ -64,7 +62,7 @@ class Match(BASE):
     series = relationship('Series', foreign_keys=series_id, backref='matches')
     tournament = relationship('Tournament', foreign_keys=tournament_id, backref='matches')
     event = relationship('Event', foreign_keys=event_id, backref='matches')
-    files = relationship('File', foreign_keys='File.match_id', cascade='all, delete-orphan')
+    files = relationship('File', foreign_keys='File.match_id', cascade='all, delete, delete-orphan')
     version = Column(String)
     minor_version = Column(String)
     dataset_id = Column(Integer, ForeignKey('datasets.id'))
@@ -75,8 +73,8 @@ class Match(BASE):
     ladder_id = Column(Integer)
     ladder = relationship('Ladder', foreign_keys=[ladder_id, platform_id], viewonly=True)
     rated = Column(Boolean)
-    players = relationship('Player', back_populates='match', cascade='all, delete-orphan')
-    teams = relationship('Team', foreign_keys='Team.match_id', cascade='all, delete-orphan')
+    players = relationship('Player', back_populates='match', cascade='all, delete, delete-orphan')
+    teams = relationship('Team', foreign_keys='Team.match_id', cascade='all, delete, delete-orphan')
     winning_team_id = Column(Integer)
     winning_team = relationship('Player', primaryjoin='and_(Player.match_id==Match.id, ' \
                                                       'Player.team_id==Match.winning_team_id)')
@@ -116,7 +114,7 @@ class Match(BASE):
     lock_teams = Column(Boolean)
     mirror = Column(Boolean)
     diplomacy_type = Column(String, nullable=False, index=True)
-    team_size = Column(String, index=True)
+    team_size = Column(String, nullable=False, index=True)
     starting_resources_id = Column(Integer, ForeignKey('starting_resources.id'))
     starting_resources = relationship('StartingResources', foreign_keys=starting_resources_id)
     starting_age_id = Column(Integer, ForeignKey('starting_ages.id'))
@@ -137,7 +135,7 @@ class Team(BASE):
     """Represent a team."""
     __tablename__ = 'teams'
     team_id = Column(Integer, primary_key=True)
-    match_id = Column(Integer, ForeignKey('matches.id'), primary_key=True)
+    match_id = Column(Integer, ForeignKey('matches.id', ondelete='cascade'), primary_key=True)
     winner = Column(Boolean)
     match = relationship('Match', foreign_keys=match_id)
 
@@ -145,7 +143,7 @@ class Team(BASE):
 class Player(BASE):
     """Represent Player in a Match."""
     __tablename__ = 'players'
-    match_id = Column(Integer, ForeignKey('matches.id'), primary_key=True)
+    match_id = Column(Integer, ForeignKey('matches.id', ondelete='cascade'), primary_key=True)
     name = Column(String, nullable=False)
     number = Column(Integer, nullable=False, primary_key=True)
     color_id = Column(Integer, ForeignKey('player_colors.id'), nullable=False)
@@ -214,12 +212,6 @@ class User(BASE):
     __table_args__ = (
         UniqueConstraint('id', 'platform_id'),
     )
-
-class Source(BASE):
-    """Represents File Source."""
-    __tablename__ = 'sources'
-    id = Column(Integer, primary_key=True)
-    name = Column(String, nullable=False)
 
 
 class Ladder(BASE):

@@ -1,10 +1,7 @@
 """Utilities."""
 import os
-import tempfile
 import re
 from datetime import datetime
-from paramiko import SSHClient
-from scp import SCPClient
 
 
 MGZ_EXT = '.mgz'
@@ -12,22 +9,34 @@ ZIP_EXT = '.zip'
 CHALLONGE_ID_LENGTH = 9
 COLLAPSE_WHITESPACE = re.compile(r'\W+')
 REMOVE_STRINGS = ['(POV)', '(PoV)', 'PoV']
+PATH_DEPTH = 2
 
 
-def copy_file(handle, ssh, path):
-    """Copy file to destination store."""
-    handle.seek(0)
-    with SCPClient(ssh.get_transport()) as scp:
-        scp.putfo(handle, path)
+def path_components(filename):
+    """Compute components of path."""
+    components = []
+    for i in range(0, PATH_DEPTH):
+        components.append(filename[i:i+2])
+    return components
 
 
-def fetch_file(ssh, path):
-    """Fetch file from destination store."""
-    with tempfile.NamedTemporaryFile() as temp:
-        with SCPClient(ssh.get_transport()) as scp:
-            scp.get(path, local_path=temp.name)
-        temp.flush()
-        return open(temp.name, 'rb')
+def save_file(data, path, filename):
+    """Save file to store."""
+    path = os.path.abspath(os.path.expanduser(path))
+    components = path_components(filename)
+    new_path = os.path.join(path, *components)
+    os.makedirs(new_path, exist_ok=True)
+    destination = os.path.join(new_path, filename)
+    with open(destination, 'wb') as handle:
+        handle.write(data)
+    return destination
+
+
+def get_file(path, filename):
+    """Get file handle from store."""
+    path = os.path.abspath(os.path.expanduser(path))
+    components = path_components(filename)
+    return open(os.path.join(os.path.join(path, *components), filename), 'rb')
 
 
 def parse_series_path(path):
@@ -64,22 +73,6 @@ def parse_filename_timestamp(func):
         minute=int(func[15:17]),
         second=int(func[17:19])
     )
-
-
-def get_store(store_host, port=22, username=None):
-    """Get connection to store."""
-    ssh = SSHClient()
-    ssh.load_system_host_keys()
-    parts = store_host.split(':')
-    if len(parts) == 2:
-        store_host = parts[0]
-        port = int(parts[1])
-        parts = store_host.split('@')
-        if len(parts) == 2:
-            username = parts[0]
-            store_host = parts[1]
-    ssh.connect(store_host, port=port, username=username)
-    return ssh
 
 
 def get_utc_now():
