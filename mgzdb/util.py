@@ -9,14 +9,15 @@ ZIP_EXT = '.zip'
 CHALLONGE_ID_LENGTH = 9
 COLLAPSE_WHITESPACE = re.compile(r'\W+')
 REMOVE_STRINGS = ['(POV)', '(PoV)', 'PoV']
-PATH_DEPTH = 2
+PATH_DEPTH = 3
+PATH_SIZE = 2
 
 
 def path_components(filename):
     """Compute components of path."""
     components = []
     for i in range(0, PATH_DEPTH):
-        components.append(filename[i:i+2])
+        components.append(filename[i * PATH_SIZE : (i * PATH_SIZE) + PATH_SIZE])
     return components
 
 

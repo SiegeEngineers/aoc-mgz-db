@@ -185,12 +185,20 @@ class AddFile:
         if from_voobly and not platform_id:
             platform_id = PLATFORM_VOOBLY
         settings = summary.get_settings()
-        map_data = summary.get_map()
+        try:
+            map_data = summary.get_map()
+        except ValueError:
+            LOGGER.error("[m:%s] has an invalid map", log_id)
+            return False
         completed = summary.get_completed()
         restored, _ = summary.get_restored()
         has_postgame = bool(postgame)
         major_version, minor_version = summary.get_version()
-        dataset_data = summary.get_dataset()
+        try:
+            dataset_data = summary.get_dataset()
+        except ValueError:
+            LOGGER.error("[m:%s] dataset inconclusive", log_id)
+            return False
         teams = summary.get_teams()
         diplomacy = summary.get_diplomacy()
         players = list(summary.get_players())
