@@ -151,6 +151,7 @@ class Player(BASE):
     platform_id = Column(String, ForeignKey('platforms.id'))
     platform = relationship('Platform', foreign_keys=platform_id)
     user_id = Column(String, index=True)
+    user_name = Column(String, index=True)
     user = relationship('User', foreign_keys=[user_id, platform_id], viewonly=True)
     match = relationship('Match', foreign_keys=[match_id], viewonly=True)
     team_id = Column(Integer)
@@ -209,6 +210,7 @@ class User(BASE):
     __tablename__ = 'users'
     id = Column(String, primary_key=True)
     platform_id = Column(String, ForeignKey('platforms.id'), primary_key=True)
+    added = Column(DateTime, default=get_utc_now)
     __table_args__ = (
         UniqueConstraint('id', 'platform_id'),
     )

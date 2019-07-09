@@ -380,6 +380,7 @@ class AddFile:
                             player.match.hash[:LOG_ID_LENGTH], user['color_id'] + 1)
                 self._get_unique(User, ['id', 'platform_id'], id=str(user['id']), platform_id=platform_id)
                 player.user_id = str(user['id'])
+                player.user_name = user.get('username')
                 player.platform_id = platform_id
                 player.rate_before = user.get('rate_before')
                 player.rate_after = user.get('rate_after')
