@@ -168,7 +168,7 @@ class Player(BASE):
     score = Column(Integer)
     rate_before = Column(Float)
     rate_after = Column(Float)
-    rate_snapshot = Column(Float)
+    rate_snapshot = Column(Float, index=True)
     military_score = Column(Integer)
     units_killed = Column(Integer)
     hit_points_killed = Column(Integer)
