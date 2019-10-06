@@ -163,7 +163,7 @@ class AddFile:
                     log_id, time.time() - start, new_file.id, match.id)
         return True
 
-    def _add_match( # pylint: disable=too-many-branches
+    def _add_match( # pylint: disable=too-many-branches, too-many-return-statements
             self, summary, played, match_hash, user_data,
             series_name=None, series_id=None, platform_id=None,
             platform_match_id=None, ladder=None
@@ -176,6 +176,7 @@ class AddFile:
             LOGGER.error("[m] failed to get duration")
             return False
 
+        log_id = match_hash[:LOG_ID_LENGTH]
         rated = False
         from_voobly, ladder_name, rated, _ = summary.get_ladder()
         if ladder:
@@ -203,7 +204,6 @@ class AddFile:
         diplomacy = summary.get_diplomacy()
         players = list(summary.get_players())
         mirror = summary.get_mirror()
-        log_id = match_hash[:LOG_ID_LENGTH]
         if platform_match_id:
             log_id += ':{}'.format(platform_match_id)
 
@@ -218,6 +218,25 @@ class AddFile:
         if user_data and len(players) != len(user_data):
             LOGGER.error("[m:%s] has mismatched user data", log_id)
             return False
+
+        if user_data:
+            from_rec = {}
+            for player in players:
+                from_rec[player['color_id']] = player['name']
+            from_user_data = {}
+            for user in user_data:
+                from_user_data[user['color_id']] = user['username']
+            strike = 0
+            for color_id, name in from_rec.items():
+                if (
+                        color_id not in from_user_data or
+                        from_user_data[color_id].lower() not in name.lower() and
+                        name.lower() not in from_user_data[color_id].lower()
+                    ):
+                    strike += 1
+            if strike >= len(players) / 2:
+                LOGGER.error("[m:%s] has mismatched user data (transposition)", log_id)
+                return False
 
         if platform_id:
             try:

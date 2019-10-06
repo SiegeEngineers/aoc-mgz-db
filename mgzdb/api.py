@@ -227,15 +227,28 @@ class API: # pylint: disable=too-many-instance-attributes
         """Remove a file, match, or series."""
         if file_id:
             obj = self.session.query(File).get(file_id)
-            if len(obj.match.files) == 1:
-                obj = obj.match.files[0].match
-        if match_id:
+            if obj:
+                if len(obj.match.files) == 1:
+                    obj = obj.match.files[0].match
+                self.session.delete(obj)
+                self.session.commit()
+                return
+        elif match_id:
             obj = self.session.query(Match).get(match_id)
-        if obj:
-            self.session.delete(obj)
-            self.session.commit()
-        else:
-            print('not found')
+            if obj:
+                for mgz in obj.files:
+                    self.session.delete(mgz)
+                self.session.commit()
+                with self.session.no_autoflush:
+                    for team in obj.teams:
+                        self.session.delete(team)
+                    for player in obj.players:
+                        self.session.delete(player)
+                self.session.commit()
+                self.session.delete(obj)
+                self.session.commit()
+                return
+        print('not found')
 
     def get(self, file_id):
         """Get a file from the store."""

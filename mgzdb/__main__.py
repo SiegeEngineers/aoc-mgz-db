@@ -122,6 +122,7 @@ def setup():
     )
     logging.getLogger('paramiko').setLevel(logging.WARN)
     logging.getLogger('voobly').setLevel(logging.WARN)
+    logging.getLogger('sqlalchemy').setLevel(logging.INFO)
 
     parser = argparse.ArgumentParser()
     default_file_path = os.path.abspath('.')

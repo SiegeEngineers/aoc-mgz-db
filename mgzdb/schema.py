@@ -42,12 +42,12 @@ class File(BASE):
     size = Column(Integer, nullable=False)
     compressed_size = Column(Integer, nullable=False)
     owner_number = Column(Integer, nullable=False)
-    owner = relationship('Player', foreign_keys=[match_id, owner_number], viewonly=True)
+    owner = relationship('Player', foreign_keys=[match_id, owner_number], viewonly=True, post_update=True)
     reference = Column(String)
     added = Column(DateTime, default=get_utc_now)
     parser_version = Column(String, nullable=False)
     __table_args__ = (
-        ForeignKeyConstraint(['match_id', 'owner_number'], ['players.match_id', 'players.number']),
+        ForeignKeyConstraint(['match_id', 'owner_number'], ['players.match_id', 'players.number'], ondelete='cascade'),
     )
 
 
@@ -62,7 +62,14 @@ class Match(BASE):
     series = relationship('Series', foreign_keys=series_id, backref='matches')
     tournament = relationship('Tournament', foreign_keys=tournament_id, backref='matches')
     event = relationship('Event', foreign_keys=event_id, backref='matches')
-    files = relationship('File', foreign_keys='File.match_id', cascade='all, delete, delete-orphan')
+    players = relationship('Player', back_populates='match', cascade='all, delete')
+    teams = relationship('Team', foreign_keys='Team.match_id', cascade='all, delete')
+    winning_team_id = Column(Integer)
+    winning_team = relationship('Player', primaryjoin='and_(Player.match_id==Match.id, ' \
+                                                      'Player.team_id==Match.winning_team_id)')
+    losers = relationship('Player', primaryjoin='and_(Player.match_id==Match.id, ' \
+                                                'Player.team_id!=Match.winning_team_id)')
+    files = relationship('File', foreign_keys='File.match_id', cascade='all, delete, delete-orphan', post_update=True)
     version = Column(String)
     minor_version = Column(String)
     dataset_id = Column(Integer, ForeignKey('datasets.id'))
@@ -73,13 +80,6 @@ class Match(BASE):
     ladder_id = Column(Integer)
     ladder = relationship('Ladder', foreign_keys=[ladder_id, platform_id], viewonly=True)
     rated = Column(Boolean)
-    players = relationship('Player', back_populates='match', cascade='all, delete, delete-orphan')
-    teams = relationship('Team', foreign_keys='Team.match_id', cascade='all, delete, delete-orphan')
-    winning_team_id = Column(Integer)
-    winning_team = relationship('Player', primaryjoin='and_(Player.match_id==Match.id, ' \
-                                                      'Player.team_id==Match.winning_team_id)')
-    losers = relationship('Player', primaryjoin='and_(Player.match_id==Match.id, ' \
-                                                'Player.team_id!=Match.winning_team_id)')
     builtin_map_id = Column(Integer)
     builtin_map = relationship('Map', foreign_keys=[builtin_map_id, dataset_id], backref='matches', viewonly=True)
     map_size_id = Column(Integer, ForeignKey('map_sizes.id'))
@@ -155,7 +155,7 @@ class Player(BASE):
     user = relationship('User', foreign_keys=[user_id, platform_id], viewonly=True)
     match = relationship('Match', foreign_keys=[match_id], viewonly=True)
     team_id = Column(Integer)
-    team = relationship('Team', foreign_keys=[match_id, team_id], backref='members', viewonly=True)
+    team = relationship('Team', foreign_keys=[match_id, team_id], backref='members', viewonly=True, cascade='all, delete, delete-orphan', single_parent=True, post_update=True)
     dataset_id = Column(Integer, ForeignKey('datasets.id'))
     dataset = relationship('Dataset', foreign_keys=[dataset_id])
     civilization_id = Column(Integer, index=True)
@@ -167,7 +167,7 @@ class Player(BASE):
     mvp = Column(Boolean)
     score = Column(Integer)
     rate_before = Column(Float)
-    rate_after = Column(Float)
+    rate_after = Column(Float, index=True)
     rate_snapshot = Column(Float, index=True)
     military_score = Column(Integer)
     units_killed = Column(Integer)
@@ -199,7 +199,7 @@ class Player(BASE):
     total_relics = Column(Integer)
     villager_high = Column(Integer)
     __table_args__ = (
-        ForeignKeyConstraint(['match_id', 'team_id'], ['teams.match_id', 'teams.team_id']),
+        ForeignKeyConstraint(['match_id', 'team_id'], ['teams.match_id', 'teams.team_id'], ondelete='cascade'),
         ForeignKeyConstraint(['civilization_id', 'dataset_id'], ['civilizations.id', 'civilizations.dataset_id']),
         ForeignKeyConstraint(['user_id', 'platform_id'], ['users.id', 'users.platform_id'])
     )

@@ -16,7 +16,7 @@ setup(
     install_requires=[
         'alembic>=1.0.8',
         'aocref>=0.0.2',
-        'python-aoc-qq',
+        'python-aoc-qq>=1.0.0',
         'coloredlogs>=10.0',
         'iso8601>=0.1.12',
         'mgz>=1.2.5',
