@@ -36,6 +36,7 @@ def main(args): # pylint: disable=too-many-branches
 
     db_api = API(
         args.database, args.store_path,
+        playback=args.playback,
         voobly_key=args.voobly_key,
         voobly_username=args.voobly_username,
         voobly_password=args.voobly_password,
@@ -122,7 +123,7 @@ def setup():
     )
     logging.getLogger('paramiko').setLevel(logging.WARN)
     logging.getLogger('voobly').setLevel(logging.WARN)
-    logging.getLogger('sqlalchemy').setLevel(logging.INFO)
+    logging.getLogger('sqlalchemy').setLevel(logging.WARN)
 
     parser = argparse.ArgumentParser()
     default_file_path = os.path.abspath('.')
@@ -130,6 +131,7 @@ def setup():
     # Global options
     parser.add_argument('-d', '--database', default=os.environ.get('MGZ_DB', DEFAULT_DB))
     parser.add_argument('-sp', '--store-path', default=os.environ.get('MGZ_STORE_PATH', default_file_path))
+    parser.add_argument('-ap', '--playback', default=os.environ.get('AOC_PLAYBACK').split(','))
     parser.add_argument('-vk', '--voobly-key', default=os.environ.get('VOOBLY_KEY', None))
     parser.add_argument('-vu', '--voobly-username', default=os.environ.get('VOOBLY_USERNAME', None))
     parser.add_argument('-vp', '--voobly-password', default=os.environ.get('VOOBLY_PASSWORD', None))

@@ -61,3 +61,28 @@ def decompress(data):
 
     LOGGER.info("decompressed in %.2f seconds", time.time() - start)
     return struct.pack('<II', len(zlib_header) + PREFIX_SIZE, 0) + zlib_header + body
+
+
+def compress_tiles(tiles):
+    """Compress map tiles."""
+    data = b''
+    for tile in tiles:
+        data += struct.pack('<bb', tile['terrain_id'], tile['elevation'])
+    return lzma.compress(data, filters=LZMA_FILTERS)
+
+
+def decompress_tiles(cdata, dimension):
+    """Decompress map tiles."""
+    x = 0
+    y = 0
+    tiles = []
+    data = lzma.decompress(cdata)
+    while y < dimension:
+        s = ((y * dimension) + x) * 2
+        terrain_id, elevation = struct.unpack('<bb', data[s:s+2])
+        tiles.append({'terrain_id': terrain_id, 'elevation': elevation, 'x': x, 'y': y})
+        x += 1
+        if x == dimension:
+            x = 0
+            y += 1
+    return tiles

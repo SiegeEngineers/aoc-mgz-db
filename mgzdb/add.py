@@ -21,10 +21,11 @@ from aocref.model import Series, Dataset, EventMap
 from mgzdb.platforms import PLATFORM_VOOBLY, VOOBLY_PLATFORMS
 from mgzdb.schema import (
     Match, SeriesMetadata, File, Ladder, Player,
-    Team, User
+    Team, User, Chat, Timeseries, Research, ObjectInstance, Market,
+    ObjectInstanceState
 )
-from mgzdb.util import parse_filename_timestamp, save_file
-from mgzdb.compress import compress
+from mgzdb.util import parse_filename, save_file
+from mgzdb.compress import compress, compress_tiles
 
 
 LOGGER = logging.getLogger(__name__)
@@ -62,6 +63,7 @@ class AddFile:
         self.session = connections['session']
         self.platforms = connections['platforms']
         self.aoe2map = connections['aoe2map']
+        self.playback = connections['playback']
 
     def add_file( # pylint: disable=too-many-return-statements, too-many-branches
             self, rec_path, reference, series_name=None,
@@ -81,35 +83,33 @@ class AddFile:
 
         try:
             handle = io.BytesIO(data)
-            summary = mgz.summary.Summary(handle, len(data))
+            summary = mgz.summary.Summary(handle, self.playback)
             # Hash against body only because header can vary based on compression
-            file_hash = hashlib.sha1(data[summary.body_position:]).hexdigest()
+            file_hash = summary.get_file_hash() #hashlib.sha1(data[summary.body_position:]).hexdigest()
             log_id = file_hash[:LOG_ID_LENGTH]
             LOGGER.info("[f:%s] add started", log_id)
         except RuntimeError:
             LOGGER.error("[f] invalid mgz file")
             return False
-
-        if self.session.query(File).filter_by(hash=file_hash).count() > 0:
-            LOGGER.warning("[f:%s] file already exists", log_id)
+        except LookupError:
+            LOGGER.error("[f] unknown encoding")
             return False
 
-        try:
-            summary.work()
-        except RuntimeError:
-            LOGGER.error("[f:%s] failed to parse mgz", log_id)
+        exists = self.session.query(File).filter_by(hash=file_hash).one_or_none()
+        if exists:
+            LOGGER.warning("[f:%s] file already exists", log_id)
+            print(series_name, series_id, exists.match_id)
+            exists.match.series_id = series_id
+            self.session.commit()
             return False
 
         encoding = summary.get_encoding()
-        if encoding == 'unknown':
-            LOGGER.warning("[f:%s] unknown file text encoding", log_id)
-            return False
-
         match_hash_obj = summary.get_hash()
         if not match_hash_obj:
             LOGGER.error("f:%s] not enough data to calculate safe match hash", log_id)
             return False
         match_hash = match_hash_obj.hexdigest()
+        build = None
 
         try:
             where = (Match.hash == match_hash)
@@ -123,11 +123,11 @@ class AddFile:
         except NoResultFound:
             LOGGER.info("[f:%s] adding match", log_id)
             if not played:
-                played = parse_filename_timestamp(original_filename)
+                played, build = parse_filename(original_filename)
             try:
                 match = self._add_match(
-                    summary, played, match_hash, user_data, series_name,
-                    series_id, platform_id, platform_match_id, ladder
+                    summary, played, match_hash, user_data, rec_path, series_name,
+                    series_id, platform_id, platform_match_id, ladder, build
                 )
                 if not match:
                     return False
@@ -164,9 +164,9 @@ class AddFile:
         return True
 
     def _add_match( # pylint: disable=too-many-branches, too-many-return-statements
-            self, summary, played, match_hash, user_data,
+            self, summary, played, match_hash, user_data, rec_path,
             series_name=None, series_id=None, platform_id=None,
-            platform_match_id=None, ladder=None
+            platform_match_id=None, ladder=None, build=None
     ):
         """Add a match."""
         try:
@@ -177,14 +177,16 @@ class AddFile:
             return False
 
         log_id = match_hash[:LOG_ID_LENGTH]
-        rated = False
-        from_voobly, ladder_name, rated, _ = summary.get_ladder()
+        platform_data = summary.get_platform()
+        rated = platform_data['rated']
         if ladder:
             rated = True
         if not ladder:
-            ladder = ladder_name
-        if from_voobly and not platform_id:
-            platform_id = PLATFORM_VOOBLY
+            ladder = platform_data['ladder']
+        if platform_data['platform_id'] and not platform_id:
+            platform_id = platform_data['platform_id']
+        if platform_data['platform_match_id'] and not platform_match_id:
+            platform_match_id = platform_data['platform_match_id']
         settings = summary.get_settings()
         try:
             map_data = summary.get_map()
@@ -200,6 +202,7 @@ class AddFile:
         except ValueError:
             LOGGER.error("[m:%s] dataset inconclusive", log_id)
             return False
+
         teams = summary.get_teams()
         diplomacy = summary.get_diplomacy()
         players = list(summary.get_players())
@@ -238,20 +241,22 @@ class AddFile:
                 LOGGER.error("[m:%s] has mismatched user data (transposition)", log_id)
                 return False
 
+        ladder_id = None
         if platform_id:
             try:
                 if platform_id in VOOBLY_PLATFORMS:
                     ladder_id = voobly.lookup_ladder_id(ladder)
-                else:
+                elif platform_id == 'aocqq':
                     ladder_id = 1 # fix..
-                ladder = self._get_unique(
-                    Ladder, keys=['id', 'platform_id'], id=ladder_id,
-                    platform_id=platform_id, name=ladder
-                )
+                if ladder_id:
+                    ladder = self._get_unique(
+                        Ladder, keys=['id', 'platform_id'], id=ladder_id,
+                        platform_id=platform_id, name=ladder
+                    )
             except ValueError:
                 ladder_id = None
-        else:
-            ladder_id = None
+        #else:
+        #    ladder_id = None
 
         try:
             dataset = self.session.query(Dataset).filter_by(id=dataset_data['id']).one()
@@ -264,6 +269,7 @@ class AddFile:
         if series:
             played = series.played
 
+
         match = self._get_unique(
             Match, ['hash', 'platform_match_id'],
             platform_match_id=platform_match_id,
@@ -275,14 +281,17 @@ class AddFile:
             event=event,
             version=major_version,
             minor_version=minor_version,
+            build=build,
             dataset=dataset,
             dataset_version=dataset_data['version'],
             ladder_id=ladder_id,
             rated=rated,
+            lobby_name=platform_data['lobby_name'],
             builtin_map_id=map_data['id'],
             event_map_id=event_map_id,
             map_size_id=map_data['dimension'],
             map_name=map_data['name'],
+            map_tiles=compress_tiles(map_data['tiles']),
             rms_seed=map_data['seed'],
             rms_zr=map_data['zr'],
             rms_custom=map_data['custom'],
@@ -301,6 +310,7 @@ class AddFile:
             speed_id=settings['speed'][0],
             cheats=settings['cheats'],
             lock_teams=settings['lock_teams'],
+            treaty_length=settings['treaty_length'],
             starting_resources_id=settings['starting_resources'][0],
             starting_age_id=settings['starting_age'][0],
             victory_condition_id=settings['victory_condition'][0],
@@ -324,65 +334,113 @@ class AddFile:
             feudal_time = data['achievements']['technology']['feudal_time']
             castle_time = data['achievements']['technology']['castle_time']
             imperial_time = data['achievements']['technology']['imperial_time']
-            self._get_unique(
-                Team,
-                ['match', 'team_id'],
-                winner=(team_id == winning_team_id),
-                match=match,
-                team_id=team_id
-            )
-            player = self._get_unique(
-                Player,
-                ['match_id', 'number'],
-                civilization_id=int(data['civilization']),
-                team_id=team_id,
-                match_id=match.id,
-                dataset=dataset,
-                platform_id=platform_id,
-                human=data['human'],
-                name=data['name'],
-                number=data['number'],
-                color_id=data['color_id'],
-                start_x=data['position'][0],
-                start_y=data['position'][1],
-                winner=data['winner'],
-                mvp=data['mvp'],
-                score=data['score'],
-                rate_snapshot=data['rate_snapshot'],
-                military_score=data['achievements']['military']['score'],
-                units_killed=data['achievements']['military']['units_killed'],
-                hit_points_killed=data['achievements']['military']['hit_points_killed'],
-                units_lost=data['achievements']['military']['units_lost'],
-                buildings_razed=data['achievements']['military']['buildings_razed'],
-                hit_points_razed=data['achievements']['military']['hit_points_razed'],
-                buildings_lost=data['achievements']['military']['buildings_lost'],
-                units_converted=data['achievements']['military']['units_converted'],
-                economy_score=data['achievements']['economy']['score'],
-                food_collected=data['achievements']['economy']['food_collected'],
-                wood_collected=data['achievements']['economy']['wood_collected'],
-                stone_collected=data['achievements']['economy']['stone_collected'],
-                gold_collected=data['achievements']['economy']['gold_collected'],
-                tribute_sent=data['achievements']['economy']['tribute_sent'],
-                tribute_received=data['achievements']['economy']['tribute_received'],
-                trade_gold=data['achievements']['economy']['trade_gold'],
-                relic_gold=data['achievements']['economy']['relic_gold'],
-                technology_score=data['achievements']['technology']['score'],
-                feudal_time=timedelta(seconds=feudal_time) if feudal_time else None,
-                castle_time=timedelta(seconds=castle_time) if castle_time else None,
-                imperial_time=timedelta(seconds=imperial_time) if imperial_time else None,
-                explored_percent=data['achievements']['technology']['explored_percent'],
-                research_count=data['achievements']['technology']['research_count'],
-                research_percent=data['achievements']['technology']['research_percent'],
-                society_score=data['achievements']['society']['score'],
-                total_wonders=data['achievements']['society']['total_wonders'],
-                total_castles=data['achievements']['society']['total_castles'],
-                total_relics=data['achievements']['society']['total_relics'],
-                villager_high=data['achievements']['society']['villager_high']
-            )
+            try:
+                self._get_unique(
+                    Team,
+                    ['match', 'team_id'],
+                    winner=(team_id == winning_team_id),
+                    match=match,
+                    team_id=team_id
+                )
+                if data['user_id']:
+                    self._get_unique(User, ['id', 'platform_id'], id=str(data['user_id']), platform_id=platform_id)
+                player = self._get_unique(
+                    Player,
+                    ['match_id', 'number'],
+                    civilization_id=int(data['civilization']),
+                    team_id=team_id,
+                    match_id=match.id,
+                    dataset=dataset,
+                    platform_id=platform_id,
+                    user_id=data['user_id'],
+                    user_name=data['name'] if data['user_id'] else None,
+                    human=data['human'],
+                    name=data['name'],
+                    number=data['number'],
+                    color_id=data['color_id'],
+                    start_x=data['position'][0],
+                    start_y=data['position'][1],
+                    winner=data['winner'],
+                    mvp=data['mvp'],
+                    score=data['score'],
+                    rate_snapshot=data['rate_snapshot'],
+                    military_score=data['achievements']['military']['score'],
+                    units_killed=data['achievements']['military']['units_killed'],
+                    hit_points_killed=data['achievements']['military']['hit_points_killed'],
+                    units_lost=data['achievements']['military']['units_lost'],
+                    buildings_razed=data['achievements']['military']['buildings_razed'],
+                    hit_points_razed=data['achievements']['military']['hit_points_razed'],
+                    buildings_lost=data['achievements']['military']['buildings_lost'],
+                    units_converted=data['achievements']['military']['units_converted'],
+                    economy_score=data['achievements']['economy']['score'],
+                    food_collected=data['achievements']['economy']['food_collected'],
+                    wood_collected=data['achievements']['economy']['wood_collected'],
+                    stone_collected=data['achievements']['economy']['stone_collected'],
+                    gold_collected=data['achievements']['economy']['gold_collected'],
+                    tribute_sent=data['achievements']['economy']['tribute_sent'],
+                    tribute_received=data['achievements']['economy']['tribute_received'],
+                    trade_gold=data['achievements']['economy']['trade_gold'],
+                    relic_gold=data['achievements']['economy']['relic_gold'],
+                    technology_score=data['achievements']['technology']['score'],
+                    feudal_time=timedelta(seconds=feudal_time) if feudal_time else None,
+                    castle_time=timedelta(seconds=castle_time) if castle_time else None,
+                    imperial_time=timedelta(seconds=imperial_time) if imperial_time else None,
+                    explored_percent=data['achievements']['technology']['explored_percent'],
+                    research_count=data['achievements']['technology']['research_count'],
+                    research_percent=data['achievements']['technology']['research_percent'],
+                    society_score=data['achievements']['society']['score'],
+                    total_wonders=data['achievements']['society']['total_wonders'],
+                    total_castles=data['achievements']['society']['total_castles'],
+                    total_relics=data['achievements']['society']['total_relics'],
+                    villager_high=data['achievements']['society']['villager_high']
+                )
+            except RuntimeError:
+                LOGGER.warning("[m:%s] failed to insert players (probably bad civ id)", log_id)
+                return False
+
             if match.platform_id == PLATFORM_VOOBLY and not user_data:
                 self._guess_match_user(player, data['name'])
 
         match.winning_team_id = winning_team_id
+
+        rate_sum = 0
+        for p in players:
+            if p.get('rate_snapshot'):
+                rate_sum += p.get('rate_snapshot')
+        rate_avg = rate_sum / len(players)
+        if False and summary._playback and ladder_id in [131] and dataset_data['id'] == 1 and rate_avg > 1700:
+            LOGGER.info("[m:%s] starting full extraction", log_id)
+            try:
+                extracted = summary.extract()
+                objs = []
+                for chat in extracted['chat']:
+                    if chat['type'] != 'chat':
+                        continue
+                    del chat['type']
+                    chat['timestamp'] = timedelta(milliseconds=chat['timestamp'])
+                    objs.append(Chat(match_id=match.id, **chat))
+                for record in extracted['timeseries']:
+                    record['timestamp'] = timedelta(milliseconds=record['timestamp'])
+                    objs.append(Timeseries(match_id=match.id, **record))
+                for record in extracted['market']:
+                    record['timestamp'] = timedelta(milliseconds=record['timestamp'])
+                    objs.append(Market(match_id=match.id, **record))
+                for record in extracted['research']:
+                    record['started'] = timedelta(milliseconds=record['started'])
+                    record['finished'] = timedelta(milliseconds=record['finished']) if record['finished'] else None
+                    objs.append(Research(match_id=match.id, dataset_id=dataset_data['id'], **record))
+                for record in extracted['objects']:
+                    record['created'] = timedelta(milliseconds=record['created'])
+                    record['destroyed'] = timedelta(milliseconds=record['destroyed']) if record['destroyed'] else None
+                    objs.append(ObjectInstance(match_id=match.id, dataset_id=dataset_data['id'], **record))
+                for record in extracted['state']:
+                    record['timestamp'] = timedelta(milliseconds=record['timestamp'])
+                    objs.append(ObjectInstanceState(match_id=match.id, dataset_id=dataset_data['id'], **record))
+                self.session.bulk_save_objects(objs)
+                self.session.commit()
+            except RuntimeError:
+                LOGGER.warning("[m:%s] failed to complete extraction", log_id)
+
         return match
 
     def _update_match_users(self, platform_id, match_id, user_data):

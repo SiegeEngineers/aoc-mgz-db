@@ -5,3 +5,4 @@ mgzdb.egg-info
 *.db
 *.sqlite
 __pycache__
+migrations

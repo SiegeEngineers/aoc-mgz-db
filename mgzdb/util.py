@@ -5,6 +5,7 @@ from datetime import datetime
 
 
 MGZ_EXT = '.mgz'
+DE_EXT = '.aoe2record'
 ZIP_EXT = '.zip'
 CHALLONGE_ID_LENGTH = 9
 COLLAPSE_WHITESPACE = re.compile(r'\W+')
@@ -62,18 +63,41 @@ def parse_series_path(path):
     return series, challonge_id
 
 
-def parse_filename_timestamp(func):
-    """Parse timestamp from default rec filename format."""
-    if not func.startswith('rec.') or not func.endswith(MGZ_EXT) or len(func) != 23:
-        return None
+def parse_filename(filename):
+    mgz = parse_filename_mgz(filename)
+    de = parse_filename_de(filename)
+    if mgz[0]:
+        return mgz
+    elif de[0]:
+        return de
+    return None, None
+
+
+def parse_filename_de(filename):
+    if not filename.startswith('MP Replay') or not filename.endswith(DE_EXT) or len(filename) < 45:
+        return None, None
     return datetime(
-        year=int(func[4:8]),
-        month=int(func[8:10]),
-        day=int(func[10:12]),
-        hour=int(func[13:15]),
-        minute=int(func[15:17]),
-        second=int(func[17:19])
-    )
+        year=int(filename[28:32]),
+        month=int(filename[33:35]),
+        day=int(filename[36:38]),
+        hour=int(filename[39:41]),
+        minute=int(filename[41:43]),
+        second=int(filename[43:45])
+        ), filename[11:26]
+
+
+def parse_filename_mgz(filename):
+    """Parse timestamp from default rec filename format."""
+    if not filename.startswith('rec.') or not filename.endswith(MGZ_EXT) or len(filename) != 23:
+        return None, None
+    return datetime(
+        year=int(filename[4:8]),
+        month=int(filename[8:10]),
+        day=int(filename[10:12]),
+        hour=int(filename[13:15]),
+        minute=int(filename[15:17]),
+        second=int(filename[17:19])
+    ), None
 
 
 def get_utc_now():

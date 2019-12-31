@@ -49,13 +49,19 @@ class API: # pylint: disable=too-many-instance-attributes
         self.voobly_key = kwargs.get('voobly_key')
         self.voobly_username = kwargs.get('voobly_username')
         self.voobly_password = kwargs.get('voobly_password')
+        self.playback = kwargs.get('playback', [])
         self.pool = None
         self.total = 0
         LOGGER.info("connected to database @ %s", db_path)
 
     def start(self):
         """Start child processes."""
+        playback_queue = multiprocessing.Queue()
+        for p in self.playback:
+            playback_queue.put(p)
         def init_worker(function):
+            playback = playback_queue.get(True)
+            LOGGER.info('%s', playback)
             function.connections = {
                 'session': get_session(self.db_path)[0],
                 'aoe2map': requests_cache.CachedSession(backend='memory'),
@@ -63,15 +69,18 @@ class API: # pylint: disable=too-many-instance-attributes
                     voobly_key=self.voobly_key,
                     voobly_username=self.voobly_username,
                     voobly_password=self.voobly_password
-                )
+                ),
+                'playback': playback
             }
         if self.consecutive:
             init_worker(add_file)
             self.debug = add_file
         else:
+            LOGGER.info("starting pool with %d workers", len(self.playback))
             self.pool = multiprocessing.Pool(
+                processes=len(self.playback),
                 initializer=init_worker,
-                initargs=(add_file, )
+                initargs=(add_file,)
             )
 
     def finished(self):
@@ -89,12 +98,12 @@ class API: # pylint: disable=too-many-instance-attributes
     def add_file(self, *args, **kwargs):
         """Add file via process pool."""
         self.total += 1
+        LOGGER.info("processing file %s", args[0])
         if self.consecutive:
             self.debug(*self.process_args, *args, **kwargs)
         else:
             if not self.pool:
                 raise ValueError('call start() first')
-
             self.pool.apply_async(
                 add_file,
                 args=(*self.process_args, *args),
@@ -153,7 +162,7 @@ class API: # pylint: disable=too-many-instance-attributes
             for filename in sorted(series_zip.namelist()):
                 if filename.endswith('/'):
                     continue
-                LOGGER.info("[%s] processing member file %s", os.path.basename(zip_path), filename)
+                LOGGER.info("[%s] processing member %s", os.path.basename(zip_path), filename)
                 self.add_file(
                     os.path.join(self.temp_dir.name, filename),
                     os.path.basename(zip_path),
