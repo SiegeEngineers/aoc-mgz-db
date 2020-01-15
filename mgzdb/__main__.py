@@ -84,7 +84,7 @@ def setup():
     # Global options
     parser.add_argument('-d', '--database', default=os.environ.get('MGZ_DB', DEFAULT_DB))
     parser.add_argument('-sp', '--store-path', default=os.environ.get('MGZ_STORE_PATH', default_file_path))
-    parser.add_argument('-ap', '--playback', default=os.environ.get('AOC_PLAYBACK').split(','))
+    parser.add_argument('-ap', '--playback', default=os.environ.get('AOC_PLAYBACK'))
     parser.add_argument('-vk', '--voobly-key', default=os.environ.get('VOOBLY_KEY', None))
     parser.add_argument('-vu', '--voobly-username', default=os.environ.get('VOOBLY_USERNAME', None))
     parser.add_argument('-vp', '--voobly-password', default=os.environ.get('VOOBLY_PASSWORD', None))

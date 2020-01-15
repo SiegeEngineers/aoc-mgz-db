@@ -13,6 +13,7 @@ setup(
     install_requires=[
         'coloredlogs==10.0',
         'mgz==1.3.1',
+        'psycopg2-binary==2.8.4',
         'python-aoc-qq==1.0.2',
         'SQLAlchemy==1.3.12',
         'voobly==1.2.9'

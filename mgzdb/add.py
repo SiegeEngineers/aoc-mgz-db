@@ -28,14 +28,13 @@ LOGGER = logging.getLogger(__name__)
 LOG_ID_LENGTH = 8
 COMPRESSED_EXT = '.mgc'
 
-
+"""
 def add_file(
         store_path, rec_path, reference,
         series=None, series_id=None, platform_id=None,
         platform_match_id=None, played=None, ladder=None,
         user_data=None
     ):
-    """Wrapper around AddFile class for parallelization."""
     obj = AddFile(
         add_file.connections, store_path # pylint: disable=no-member
     )
@@ -48,17 +47,17 @@ def add_file(
         )
     except KeyboardInterrupt:
         sys.exit()
-
+"""
 
 class AddFile:
     """Add file to MGZ Database."""
 
-    def __init__(self, connections, store_path):
+    def __init__(self, session, platforms, store_path, playback):
         """Initialize sessions."""
+        self.session = session
+        self.platforms = platforms
         self.store_path = store_path
-        self.session = connections['session']
-        self.platforms = connections['platforms']
-        self.playback = connections['playback']
+        self.playback = playback
 
     def add_file( # pylint: disable=too-many-return-statements, too-many-branches
             self, rec_path, reference, series_name=None,

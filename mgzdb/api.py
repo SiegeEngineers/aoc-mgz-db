@@ -20,34 +20,16 @@ class API: # pylint: disable=too-many-instance-attributes
 
     def __init__(self, db_path, store_path, **kwargs):
         """Initialize sessions."""
-
         self.session, _ = get_session(db_path)
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.store = None
         self.store_path = store_path
-        self.db_path = db_path
         self.platforms = platforms.factory(
             voobly_key=kwargs.get('voobly_key'),
             voobly_username=kwargs.get('voobly_username'),
             voobly_password=kwargs.get('voobly_password')
         )
-        self.voobly_key = kwargs.get('voobly_key')
-        self.voobly_username = kwargs.get('voobly_username')
-        self.voobly_password = kwargs.get('voobly_password')
-        self.playback = kwargs.get('playback', [])
-        self.total = 0
+        self.af = AddFile(self.session, self.platforms, self.store_path, kwargs.get('playback'))
         LOGGER.info("connected to database @ %s", db_path)
-
-        connections = {
-                'session': get_session(self.db_path)[0],
-                'platforms': platforms.factory(
-                    voobly_key=self.voobly_key,
-                    voobly_username=self.voobly_username,
-                    voobly_password=self.voobly_password
-                ),
-                'playback': self.playback[0]
-        }
-        self.af = AddFile(connections, self.store_path)
 
 
     def add_file(self, *args, **kwargs):
@@ -115,7 +97,10 @@ class API: # pylint: disable=too-many-instance-attributes
             LOGGER.info("[%s] finished", os.path.basename(zip_path))
 
     def remove(self, file_id=None, match_id=None):
-        """Remove a file, match, or series."""
+        """Remove a file, match, or series.
+
+        TODO: Use cascading deletes for this.
+        """
         if file_id:
             obj = self.session.query(File).get(file_id)
             if obj:
