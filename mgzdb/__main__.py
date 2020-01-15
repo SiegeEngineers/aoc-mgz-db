@@ -10,17 +10,12 @@ from mgzdb.api import API
 from mgzdb.util import parse_series_path
 
 
-CMD_QUERY = 'query'
 CMD_ADD = 'add'
 CMD_REMOVE = 'remove'
 CMD_GET = 'get'
-CMD_BOOTSTRAP = 'bootstrap'
 SUBCMD_FILE = 'file'
 SUBCMD_MATCH = 'match'
 SUBCMD_SERIES = 'series'
-SUBCMD_SUMMARY = 'summary'
-SUBCMD_ARCHIVE = 'archive'
-SUBCMD_DB = 'db'
 DEFAULT_DB = 'sqlite:///data.db'
 
 
@@ -72,19 +67,6 @@ def main(args): # pylint: disable=too-many-branches
                 if args.progress:
                     progress.total = db_api.total
 
-        # Database
-        elif args.subcmd == SUBCMD_DB:
-            remote_api = API(args.remote_db_url, args.remote_store_path)
-            db_api.add_db(remote_api)
-            if args.progress:
-                progress.total = db_api.total
-
-        # Archive
-        elif args.subcmd == SUBCMD_ARCHIVE:
-            db_api.add_archive(args.archive_path)
-            if args.progress:
-                progress.total = db_api.total
-
         db_api.finished()
         if args.progress:
             progress.close()
@@ -92,10 +74,6 @@ def main(args): # pylint: disable=too-many-branches
     # Remove
     elif args.cmd == CMD_REMOVE:
         db_api.remove(file_id=args.file, match_id=args.match)
-
-    # Query
-    elif args.cmd == CMD_QUERY:
-        print(json.dumps(db_api.query(args.subcmd, **vars(args)), indent=2))
 
     # Get
     elif args.cmd == CMD_GET:
@@ -136,28 +114,6 @@ def setup():
     subparsers = parser.add_subparsers(dest='cmd')
     subparsers.required = True
 
-    # "query" command
-    query = subparsers.add_parser(CMD_QUERY)
-
-    # "query" subcommands
-    query_subparsers = query.add_subparsers(dest='subcmd')
-    query_subparsers.required = True
-
-    # "query match"
-    query_match = query_subparsers.add_parser(SUBCMD_MATCH)
-    query_match.add_argument('match_id', type=int)
-
-    # "query file"
-    query_file = query_subparsers.add_parser(SUBCMD_FILE)
-    query_file.add_argument('file_id', type=int)
-
-    # "query series"
-    query_series = query_subparsers.add_parser(SUBCMD_SERIES)
-    query_series.add_argument('series_id', type=int)
-
-    # "query summary"
-    query_subparsers.add_parser(SUBCMD_SUMMARY)
-
     # "add" command
     add = subparsers.add_parser(CMD_ADD)
 
@@ -181,15 +137,6 @@ def setup():
     add_series = add_subparsers.add_parser(SUBCMD_SERIES)
     add_series.add_argument('zip_path', nargs='+')
 
-    # "add database"
-    add_db = add_subparsers.add_parser(SUBCMD_DB)
-    add_db.add_argument('remote_db_url')
-    add_db.add_argument('remote_store_path')
-
-    # "add archive"
-    add_archive = add_subparsers.add_parser(SUBCMD_ARCHIVE)
-    add_archive.add_argument('archive_path')
-
     # "remove" command
     remove = subparsers.add_parser(CMD_REMOVE)
     remove_group = remove.add_mutually_exclusive_group(required=True)
@@ -200,9 +147,6 @@ def setup():
     get = subparsers.add_parser(CMD_GET)
     get.add_argument('file')
     get.add_argument('-o', '--output-path')
-
-    # "bootstrap" command
-    subparsers.add_parser(CMD_BOOTSTRAP)
 
     args = parser.parse_args()
     main(args)

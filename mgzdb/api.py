@@ -20,10 +20,6 @@ from mgzdb.util import get_file
 
 
 LOGGER = logging.getLogger(__name__)
-QUERY_MATCH = 'match'
-QUERY_FILE = 'file'
-QUERY_SERIES = 'series'
-QUERY_SUMMARY = 'summary'
 
 
 class API: # pylint: disable=too-many-instance-attributes
@@ -170,67 +166,6 @@ class API: # pylint: disable=too-many-instance-attributes
                     series_id
                 )
             LOGGER.info("[%s] finished", os.path.basename(zip_path))
-
-    def add_db(self, remote):
-        """Add records from another database."""
-        for match in remote.session.query(Match).all():
-            for mgz in match.files:
-                filename, data = remote.get(mgz.id)
-                path = os.path.join(self.temp_dir.name, filename)
-                with open(path, 'wb') as handle:
-                    handle.write(data)
-                series = match.series.name if match.series else None
-                series_id = match.series.series_id if match.series else None
-                self.add_file(
-                    path,
-                    mgz.id,
-                    series,
-                    series_id=series_id,
-                    platform_id=match.platform_id,
-                    platform_match_id=match.platform_match_id,
-                    played=match.played,
-                    ladder=match.ladder.name if match.ladder else None,
-                    user_data=[{
-                        'id': mgz.owner.voobly_user_id,
-                        'clan': mgz.owner.voobly_clan_id,
-                        'color_id': mgz.owner.color_id,
-                        'rate_before': mgz.owner.rate_before,
-                        'rate_after': mgz.owner.rate_after
-                    }]
-                )
-
-    def add_archive(self, path, single_pov=False):
-        """Add records from archive."""
-        archive_path = os.path.abspath(os.path.expanduser(path))
-        for platform in os.listdir(archive_path):
-            LOGGER.info("[%s] starting platform", platform)
-            for subdir in os.listdir(os.path.join(archive_path, platform)):
-                for match_id in os.listdir(os.path.join(archive_path, platform, subdir)):
-                    match_path = os.path.join(archive_path, platform, subdir, match_id)
-                    if not os.path.exists(os.path.join(match_path, 'metadata.json')):
-                        continue
-                    for zipped in os.listdir(match_path):
-                        if zipped.endswith('.zip'):
-                            with zipfile.ZipFile(os.path.join(match_path, zipped), 'r') as zip_ref:
-                                zip_ref.extractall(os.path.join(self.temp_dir.name, match_id))
-                    for mgz in os.listdir(os.path.join(self.temp_dir.name, match_id)):
-                        if not mgz.endswith('.mgz'):
-                            continue
-                        mgz_path = os.path.join(self.temp_dir.name, match_id, mgz)
-                        LOGGER.info('[%s][%s] adding match: %s', platform, match_id, mgz_path)
-                        match = json.loads(open(os.path.join(match_path, 'metadata.json'), 'r').read())
-                        self.add_file(
-                            mgz_path,
-                            mgz,
-                            None, # series
-                            platform_id=platform,
-                            platform_match_id=int(match_id),
-                            ladder=match.get('ladder'),
-                            played=iso8601.parse_date(match['timestamp']),
-                            user_data=match['players']
-                        )
-                        if single_pov:
-                            break
 
     def remove(self, file_id=None, match_id=None):
         """Remove a file, match, or series."""
