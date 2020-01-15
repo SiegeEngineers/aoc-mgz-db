@@ -1,6 +1,5 @@
 """MGZ database API."""
 
-import hashlib
 import io
 import logging
 import os
@@ -13,7 +12,6 @@ from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 from sqlalchemy.exc import IntegrityError
 
 import voobly
-import mgz.const
 import mgz.summary
 
 from mgzdb.platforms import PLATFORM_VOOBLY, VOOBLY_PLATFORMS
@@ -82,7 +80,7 @@ class AddFile:
             handle = io.BytesIO(data)
             summary = mgz.summary.Summary(handle, self.playback)
             # Hash against body only because header can vary based on compression
-            file_hash = summary.get_file_hash() #hashlib.sha1(data[summary.body_position:]).hexdigest()
+            file_hash = summary.get_file_hash()
             log_id = file_hash[:LOG_ID_LENGTH]
             LOGGER.info("[f:%s] add started", log_id)
         except RuntimeError:
@@ -252,8 +250,6 @@ class AddFile:
                     )
             except ValueError:
                 ladder_id = None
-        #else:
-        #    ladder_id = None
 
         try:
             dataset = self.session.query(Dataset).filter_by(id=dataset_data['id']).one()

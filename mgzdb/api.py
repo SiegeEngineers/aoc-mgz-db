@@ -1,16 +1,12 @@
 """MGZ database API."""
 
 import logging
-import multiprocessing
-import json
 import os
-import sys
 import tempfile
 import zipfile
 
-import voobly
 from mgzdb import platforms
-from mgzdb.add import add_file
+from mgzdb.add import AddFile
 from mgzdb.compress import decompress
 from mgzdb.schema import get_session, File, Match
 from mgzdb.util import get_file
@@ -22,18 +18,14 @@ LOGGER = logging.getLogger(__name__)
 class API: # pylint: disable=too-many-instance-attributes
     """MGZ Database API."""
 
-    def __init__(self, db_path, store_path, consecutive=False, callback=None, **kwargs):
+    def __init__(self, db_path, store_path, **kwargs):
         """Initialize sessions."""
 
         self.session, _ = get_session(db_path)
-        self.process_args = (store_path,)
         self.temp_dir = tempfile.TemporaryDirectory()
         self.store = None
         self.store_path = store_path
         self.db_path = db_path
-        self.callback = callback
-        self.debug = None
-        self.consecutive = consecutive
         self.platforms = platforms.factory(
             voobly_key=kwargs.get('voobly_key'),
             voobly_username=kwargs.get('voobly_username'),
@@ -43,66 +35,25 @@ class API: # pylint: disable=too-many-instance-attributes
         self.voobly_username = kwargs.get('voobly_username')
         self.voobly_password = kwargs.get('voobly_password')
         self.playback = kwargs.get('playback', [])
-        self.pool = None
         self.total = 0
         LOGGER.info("connected to database @ %s", db_path)
 
-    def start(self):
-        """Start child processes."""
-        playback_queue = multiprocessing.Queue()
-        for p in self.playback:
-            playback_queue.put(p)
-        def init_worker(function):
-            playback = playback_queue.get(True)
-            LOGGER.info('%s', playback)
-            function.connections = {
+        connections = {
                 'session': get_session(self.db_path)[0],
                 'platforms': platforms.factory(
                     voobly_key=self.voobly_key,
                     voobly_username=self.voobly_username,
                     voobly_password=self.voobly_password
                 ),
-                'playback': playback
-            }
-        if self.consecutive:
-            init_worker(add_file)
-            self.debug = add_file
-        else:
-            LOGGER.info("starting pool with %d workers", len(self.playback))
-            self.pool = multiprocessing.Pool(
-                processes=len(self.playback),
-                initializer=init_worker,
-                initargs=(add_file,)
-            )
+                'playback': self.playback[0]
+        }
+        self.af = AddFile(connections, self.store_path)
 
-    def finished(self):
-        """Wait for child processes to end."""
-        try:
-            if not self.consecutive:
-                self.pool.close()
-                self.pool.join()
-        except KeyboardInterrupt:
-            print('user requested exit')
-            sys.exit()
-        finally:
-            self.temp_dir.cleanup()
 
     def add_file(self, *args, **kwargs):
         """Add file via process pool."""
-        self.total += 1
         LOGGER.info("processing file %s", args[0])
-        if self.consecutive:
-            self.debug(*self.process_args, *args, **kwargs)
-        else:
-            if not self.pool:
-                raise ValueError('call start() first')
-            self.pool.apply_async(
-                add_file,
-                args=(*self.process_args, *args),
-                kwds=kwargs,
-                callback=self._file_added,
-                error_callback=self._critical_error
-            )
+        self.af.add_file(*args, **kwargs)
 
     def add_match(self, platform, url, single_pov=False):
         """Add a match via platform url."""
@@ -112,7 +63,7 @@ class API: # pylint: disable=too-many-instance-attributes
             match_id = url
         try:
             match = self.platforms[platform].get_match(match_id)
-        except voobly.VooblyError as error:
+        except RuntimeError as error:
             LOGGER.error("failed to get match: %s", error)
             return
         except ValueError:
@@ -194,14 +145,3 @@ class API: # pylint: disable=too-many-instance-attributes
         """Get a file from the store."""
         mgz_file = self.session.query(File).get(file_id)
         return mgz_file.original_filename, decompress(get_file(self.store_path, mgz_file.filename))
-
-    def _file_added(self, success): # pylint: disable=unused-argument
-        """Callback when file is addded."""
-        if self.callback:
-            self.callback()
-
-    def _critical_error(self, val): # pylint: disable=unused-argument
-        """Handle critical errors from child processes."""
-        print(val, type(val))
-        if self.callback:
-            self.callback()

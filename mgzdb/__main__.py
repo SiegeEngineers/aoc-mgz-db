@@ -5,7 +5,6 @@ import logging
 import os
 
 import coloredlogs
-import tqdm
 from mgzdb.api import API
 from mgzdb.util import parse_series_path
 
@@ -22,20 +21,12 @@ DEFAULT_DB = 'sqlite:///data.db'
 def main(args): # pylint: disable=too-many-branches
     """Handle arguments."""
 
-    add_callback = None
-    if args.progress:
-        progress = tqdm.tqdm(unit='mgz')
-        coloredlogs.set_level('CRITICAL')
-        add_callback = progress.update
-
     db_api = API(
         args.database, args.store_path,
         playback=args.playback,
         voobly_key=args.voobly_key,
         voobly_username=args.voobly_username,
-        voobly_password=args.voobly_password,
-        consecutive=args.consecutive,
-        callback=add_callback
+        voobly_password=args.voobly_password
     )
 
     # Add
@@ -47,15 +38,11 @@ def main(args): # pylint: disable=too-many-branches
         if args.subcmd == SUBCMD_FILE:
             for rec in args.rec_path:
                 db_api.add_file(rec, args.source, None)
-                if args.progress:
-                    progress.total = db_api.total
 
         # Match
         elif args.subcmd == SUBCMD_MATCH:
             for url in args.url:
                 db_api.add_match(args.platform, url)
-                if args.progress:
-                    progress.total = db_api.total
 
         # Series
         elif args.subcmd == SUBCMD_SERIES:
@@ -64,12 +51,6 @@ def main(args): # pylint: disable=too-many-branches
                 db_api.add_series(
                     path, series, series_id
                 )
-                if args.progress:
-                    progress.total = db_api.total
-
-        db_api.finished()
-        if args.progress:
-            progress.close()
 
     # Remove
     elif args.cmd == CMD_REMOVE:
@@ -107,8 +88,6 @@ def setup():
     parser.add_argument('-vk', '--voobly-key', default=os.environ.get('VOOBLY_KEY', None))
     parser.add_argument('-vu', '--voobly-username', default=os.environ.get('VOOBLY_USERNAME', None))
     parser.add_argument('-vp', '--voobly-password', default=os.environ.get('VOOBLY_PASSWORD', None))
-    parser.add_argument('-c', '--consecutive', action='store_true', default=False)
-    parser.add_argument('-p', '--progress', action='store_true', default=False)
 
     # Commands
     subparsers = parser.add_subparsers(dest='cmd')

@@ -54,7 +54,10 @@ class VooblySession(PlatformSession):
 
     def get_match(self, match_id):
         """Get match."""
-        return voobly.get_match(self.session, match_id)
+        try:
+            return voobly.get_match(self.session, match_id)
+        except voobly.VooblyError:
+            raise RuntimeError('could not get match')
 
     def download_rec(self, url, target):
         """Download a rec."""

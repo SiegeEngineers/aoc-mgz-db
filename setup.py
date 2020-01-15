@@ -15,7 +15,6 @@ setup(
         'mgz==1.3.1',
         'python-aoc-qq==1.0.2',
         'SQLAlchemy==1.3.12',
-        'tqdm==4.41.1',
         'voobly==1.2.9'
     ],
     entry_points = {
