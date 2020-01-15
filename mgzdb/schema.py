@@ -21,6 +21,221 @@ def get_session(url):
     return session, engine
 
 
+class Platform(BASE):
+    """Multiplayer platform."""
+    __tablename__ = 'platforms'
+    id = Column(String, primary_key=True)
+    name = Column(String)
+    url = Column(String)
+    match_url = Column(String)
+
+
+class CanonicalPlayer(BASE):
+    """Canonical player profile."""
+    __tablename__ = 'canonical_players'
+    user_id = Column(String, primary_key=True)
+    platform_id = Column(String, primary_key=True)
+    name = Column(String)
+
+
+class Event(BASE):
+    """Event (one or more tournaments)."""
+    __tablename__ = 'events'
+    id = Column(String, primary_key=True)
+    name = Column(String)
+
+
+class Tournament(BASE):
+    """A specific tournament (or stage of an event)."""
+    __tablename__ = 'tournaments'
+    id = Column(String, primary_key=True)
+    name = Column(String)
+    event_id = Column(String, ForeignKey('events.id'), index=True)
+    event = relationship('Event', foreign_keys=[event_id], backref='tournaments')
+
+
+class Round(BASE):
+    """Tournament round."""
+    __tablename__ = 'rounds'
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    tournament_id = Column(String, ForeignKey('tournaments.id'), index=True)
+    tournament = relationship('Tournament', foreign_keys=[tournament_id], backref='rounds')
+
+
+class Series(BASE):
+    """Series of matches."""
+    __tablename__ = 'series'
+    id = Column(String, primary_key=True)
+    round_id = Column(Integer, ForeignKey('rounds.id'), index=True)
+    round = relationship('Round', foreign_keys=[round_id], backref='series')
+    played = Column(DateTime)
+    tournament = relationship(
+        'Tournament',
+        secondary='rounds',
+        primaryjoin='Series.round_id == Round.id',
+        secondaryjoin='Tournament.id == Round.tournament_id',
+        viewonly=True,
+        uselist=False
+    )
+
+
+class Participant(BASE):
+    """Series participants (team or single player)."""
+    __tablename__ = 'participants'
+    id = Column(Integer, primary_key=True)
+    series_id = Column(String, ForeignKey('series.id'), index=True)
+    series = relationship('Series', foreign_keys=[series_id], backref='participants')
+    name = Column(String)
+    score = Column(Integer)
+    winner = Column(Boolean)
+
+
+class Dataset(BASE):
+    """AoC Dataset (a specific set of civs/balance/etc)."""
+    __tablename__ = 'datasets'
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+
+
+class Civilization(BASE):
+    """Civilization belonging to a dataset."""
+    __tablename__ = 'civilizations'
+    id = Column(Integer, primary_key=True)
+    dataset_id = Column(Integer, ForeignKey('datasets.id'), primary_key=True)
+    dataset = relationship('Dataset', foreign_keys=[dataset_id])
+    name = Column(String, nullable=False)
+
+
+class CivilizationBonus(BASE):
+    """Bonus belonging to civilization."""
+    __tablename__ = 'civilization_bonuses'
+    id = Column(Integer, primary_key=True)
+    civilization_id = Column(Integer)
+    dataset_id = Column(Integer, ForeignKey('datasets.id'), index=True)
+    type = Column(String)
+    description = Column(String)
+    civilization = relationship(
+        'Civilization',
+        foreign_keys=[civilization_id, dataset_id],
+        backref='bonuses'
+    )
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ['civilization_id', 'dataset_id'], ['civilizations.id', 'civilizations.dataset_id']
+        ),
+    )
+
+
+class EventMap(BASE):
+    """Event map."""
+    __tablename__ = 'event_maps'
+    id = Column(Integer, primary_key=True)
+    event_id = Column(String, ForeignKey('events.id'), index=True)
+    event = relationship('Event', foreign_keys=event_id, backref='maps')
+    name = Column(String, index=True)
+    zr = Column(Boolean)
+    aoe2mapnet_id = Column(String)
+
+
+class Map(BASE):
+    """Builtin map."""
+    __tablename__ = 'maps'
+    id = Column(Integer, primary_key=True)
+    dataset_id = Column(Integer, ForeignKey('datasets.id'), primary_key=True)
+    dataset = relationship('Dataset', foreign_keys=[dataset_id])
+    name = Column(String, index=True)
+
+
+class Technology(BASE):
+    __tablename__ = 'technologies'
+    id = Column(Integer, primary_key=True)
+    dataset_id = Column(Integer, ForeignKey('datasets.id'), primary_key=True)
+    dataset = relationship('Dataset', foreign_keys=[dataset_id])
+    name = Column(String)
+
+
+class Object(BASE):
+    __tablename__ = 'objects'
+    id = Column(Integer, primary_key=True)
+    dataset_id = Column(Integer, ForeignKey('datasets.id'),primary_key=True)
+    dataset = relationship('Dataset', foreign_keys=[dataset_id])
+    name = Column(String)
+
+
+class Terrain(BASE):
+    __tablename__ = 'terrain'
+    id = Column(Integer, primary_key=True)
+    dataset_id = Column(Integer, ForeignKey('datasets.id'), primary_key=True)
+    name = Column(String)
+    color_level = Column(String(7))
+    color_up = Column(String(7))
+    color_down = Column(String(7))
+
+
+class GameType(BASE):
+    """Game type."""
+    __tablename__ = 'game_types'
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+
+
+class StartingResources(BASE):
+    """Starting resoruces."""
+    __tablename__ = 'starting_resources'
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+
+
+class VictoryCondition(BASE):
+    """ictory conditions."""
+    __tablename__ = 'victory_conditions'
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+
+
+class MapRevealChoice(BASE):
+    """Map reveal choices."""
+    __tablename__ = 'map_reveal_choices'
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+
+
+class StartingAge(BASE):
+    """Starting Ages."""
+    __tablename__ = 'starting_ages'
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+
+
+class Difficulty(BASE):
+    """Difficulties."""
+    __tablename__ = 'difficulties'
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+
+
+class Speed(BASE):
+    """Speeds."""
+    __tablename__ = 'speeds'
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+
+
+class MapSize(BASE):
+    """Map sizes."""
+    __tablename__ = 'map_sizes'
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+
+
+class PlayerColor(BASE):
+    """Player color."""
+    __tablename__ = 'player_colors'
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+
+
 class File(BASE):
     """Represent File."""
     __tablename__ = 'files'
@@ -346,218 +561,3 @@ class Market(BASE):
     wood = Column(Float)
     stone = Column(Float)
     food = Column(Float)
-
-
-class Platform(BASE):
-    """Multiplayer platform."""
-    __tablename__ = 'platforms'
-    id = Column(String, primary_key=True)
-    name = Column(String)
-    url = Column(String)
-    match_url = Column(String)
-
-
-class CanonicalPlayer(BASE):
-    """Canonical player profile."""
-    __tablename__ = 'canonical_players'
-    user_id = Column(String, primary_key=True)
-    platform_id = Column(String, primary_key=True)
-    name = Column(String)
-
-
-class Event(BASE):
-    """Event (one or more tournaments)."""
-    __tablename__ = 'events'
-    id = Column(String, primary_key=True)
-    name = Column(String)
-
-
-class Tournament(BASE):
-    """A specific tournament (or stage of an event)."""
-    __tablename__ = 'tournaments'
-    id = Column(String, primary_key=True)
-    name = Column(String)
-    event_id = Column(String, ForeignKey('events.id'), index=True)
-    event = relationship('Event', foreign_keys=[event_id], backref='tournaments')
-
-
-class Round(BASE):
-    """Tournament round."""
-    __tablename__ = 'rounds'
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-    tournament_id = Column(String, ForeignKey('tournaments.id'), index=True)
-    tournament = relationship('Tournament', foreign_keys=[tournament_id], backref='rounds')
-
-
-class Series(BASE):
-    """Series of matches."""
-    __tablename__ = 'series'
-    id = Column(String, primary_key=True)
-    round_id = Column(Integer, ForeignKey('rounds.id'), index=True)
-    round = relationship('Round', foreign_keys=[round_id], backref='series')
-    played = Column(DateTime)
-    tournament = relationship(
-        'Tournament',
-        secondary='rounds',
-        primaryjoin='Series.round_id == Round.id',
-        secondaryjoin='Tournament.id == Round.tournament_id',
-        viewonly=True,
-        uselist=False
-    )
-
-
-class Participant(BASE):
-    """Series participants (team or single player)."""
-    __tablename__ = 'participants'
-    id = Column(Integer, primary_key=True)
-    series_id = Column(String, ForeignKey('series.id'), index=True)
-    series = relationship('Series', foreign_keys=[series_id], backref='participants')
-    name = Column(String)
-    score = Column(Integer)
-    winner = Column(Boolean)
-
-
-class Dataset(BASE):
-    """AoC Dataset (a specific set of civs/balance/etc)."""
-    __tablename__ = 'datasets'
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-
-
-class Civilization(BASE):
-    """Civilization belonging to a dataset."""
-    __tablename__ = 'civilizations'
-    id = Column(Integer, primary_key=True)
-    dataset_id = Column(Integer, ForeignKey('datasets.id'), primary_key=True)
-    dataset = relationship('Dataset', foreign_keys=[dataset_id])
-    name = Column(String, nullable=False)
-
-
-class CivilizationBonus(BASE):
-    """Bonus belonging to civilization."""
-    __tablename__ = 'civilization_bonuses'
-    id = Column(Integer, primary_key=True)
-    civilization_id = Column(Integer)
-    dataset_id = Column(Integer, ForeignKey('datasets.id'), index=True)
-    type = Column(String)
-    description = Column(String)
-    civilization = relationship(
-        'Civilization',
-        foreign_keys=[civilization_id, dataset_id],
-        backref='bonuses'
-    )
-    __table_args__ = (
-        ForeignKeyConstraint(
-            ['civilization_id', 'dataset_id'], ['civilizations.id', 'civilizations.dataset_id']
-        ),
-    )
-
-
-class EventMap(BASE):
-    """Event map."""
-    __tablename__ = 'event_maps'
-    id = Column(Integer, primary_key=True)
-    event_id = Column(String, ForeignKey('events.id'), index=True)
-    event = relationship('Event', foreign_keys=event_id, backref='maps')
-    name = Column(String, index=True)
-    zr = Column(Boolean)
-    aoe2mapnet_id = Column(String)
-
-
-class Map(BASE):
-    """Builtin map."""
-    __tablename__ = 'maps'
-    id = Column(Integer, primary_key=True)
-    dataset_id = Column(Integer, ForeignKey('datasets.id'), primary_key=True)
-    dataset = relationship('Dataset', foreign_keys=[dataset_id])
-    name = Column(String, index=True)
-
-
-class Technology(BASE):
-    __tablename__ = 'technologies'
-    id = Column(Integer, primary_key=True)
-    dataset_id = Column(Integer, ForeignKey('datasets.id'), primary_key=True)
-    dataset = relationship('Dataset', foreign_keys=[dataset_id])
-    name = Column(String)
-
-
-class Object(BASE):
-    __tablename__ = 'objects'
-    id = Column(Integer, primary_key=True)
-    dataset_id = Column(Integer, ForeignKey('datasets.id'),primary_key=True)
-    dataset = relationship('Dataset', foreign_keys=[dataset_id])
-    name = Column(String)
-
-
-class Terrain(BASE):
-    __tablename__ = 'terrain'
-    id = Column(Integer, primary_key=True)
-    dataset_id = Column(Integer, ForeignKey('datasets.id'), primary_key=True)
-    name = Column(String)
-    color_level = Column(String(7))
-    color_up = Column(String(7))
-    color_down = Column(String(7))
-
-
-class GameType(BASE):
-    """Game type."""
-    __tablename__ = 'game_types'
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-
-
-class StartingResources(BASE):
-    """Starting resoruces."""
-    __tablename__ = 'starting_resources'
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-
-
-class VictoryCondition(BASE):
-    """ictory conditions."""
-    __tablename__ = 'victory_conditions'
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-
-
-class MapRevealChoice(BASE):
-    """Map reveal choices."""
-    __tablename__ = 'map_reveal_choices'
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-
-
-class StartingAge(BASE):
-    """Starting Ages."""
-    __tablename__ = 'starting_ages'
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-
-
-class Difficulty(BASE):
-    """Difficulties."""
-    __tablename__ = 'difficulties'
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-
-
-class Speed(BASE):
-    """Speeds."""
-    __tablename__ = 'speeds'
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-
-
-class MapSize(BASE):
-    """Map sizes."""
-    __tablename__ = 'map_sizes'
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-
-
-class PlayerColor(BASE):
-    """Player color."""
-    __tablename__ = 'player_colors'
-    id = Column(Integer, primary_key=True)
-    name = Column(String)

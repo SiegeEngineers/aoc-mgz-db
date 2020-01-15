@@ -1,8 +1,5 @@
 """Platform interface."""
 
-import requests
-from requests.exceptions import RequestException
-
 import aocqq
 import voobly
 
@@ -94,21 +91,21 @@ class QQSession(PlatformSession):
         """Get a match."""
         try:
             return aocqq.get_match(self.session, match_id)
-        except RequestException:
+        except aocqq.AOCQQError:
             raise RuntimeError('could not get match')
 
     def download_rec(self, url, target):
         """Download a rec."""
         try:
             return aocqq.download_rec(self.session, url, target)
-        except RequestException:
+        except aocqq.AOCQQError:
             raise RuntimeError('could not get rec')
 
     def get_ladder_matches(self, ladder_id, from_timestamp=None, limit=None):
         """Get ladder matches."""
         try:
             return aocqq.get_ladder_matches(self.session, ladder_id, limit)
-        except RequestException:
+        except aocqq.AOCQQError:
             raise RuntimeError('could not get ladder matches')
 
     def get_ladder(self, ladder_id, start=0, limit=None):
@@ -132,5 +129,5 @@ def factory(voobly_key=None, voobly_username=None, voobly_password=None):
         password=voobly_password,
         version=id
     )) for id in VOOBLY_PLATFORMS})
-    sessions[PLATFORM_QQ] = QQSession(requests.session())
+    sessions[PLATFORM_QQ] = QQSession(aocqq.get_session())
     return sessions

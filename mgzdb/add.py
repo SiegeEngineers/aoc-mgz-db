@@ -9,7 +9,6 @@ import time
 from datetime import timedelta
 
 import pkg_resources
-import requests
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 from sqlalchemy.exc import IntegrityError
 
@@ -472,7 +471,7 @@ class AddFile:
                 platform_id=PLATFORM_VOOBLY
             )
             player.user_id = user_id
-        except (voobly.VooblyError, requests.exceptions.ConnectionError) as error:
+        except voobly.VooblyError as error:
             LOGGER.warning("failed to lookup Voobly user: %s", error)
 
     def _handle_series(self, series_id, series_name, map_data, log_id):

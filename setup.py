@@ -11,13 +11,12 @@ setup(
     author_email='happyleaves.tfr@gmail.com',
     packages=find_packages(),
     install_requires=[
-        'python-aoc-qq>=1.0.1',
-        'coloredlogs>=10.0',
-        'mgz>=1.2.5',
-        'requests>=2.20.1',
-        'SQLAlchemy>=1.2.14',
-        'tqdm>=4.28.1',
-        'voobly>=1.2.9'
+        'coloredlogs==10.0',
+        'mgz==1.3.1',
+        'python-aoc-qq==1.0.2',
+        'SQLAlchemy==1.3.12',
+        'tqdm==4.41.1',
+        'voobly==1.2.9'
     ],
     entry_points = {
         'console_scripts': ['mgzdb=mgzdb.__main__:setup'],
