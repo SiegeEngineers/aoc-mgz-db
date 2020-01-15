@@ -12,10 +12,10 @@ import iso8601
 import requests_cache
 
 import voobly
-from mgzdb import queries, platforms
+from mgzdb import platforms
 from mgzdb.add import add_file
 from mgzdb.compress import decompress
-from mgzdb.schema import get_session, reset, File, Match
+from mgzdb.schema import get_session, File, Match
 from mgzdb.util import get_file
 
 
@@ -263,27 +263,6 @@ class API: # pylint: disable=too-many-instance-attributes
         """Get a file from the store."""
         mgz_file = self.session.query(File).get(file_id)
         return mgz_file.original_filename, decompress(get_file(self.store_path, mgz_file.filename))
-
-    def reset(self):
-        """Reset database."""
-        reset(self.db_path)
-        LOGGER.info("reset database")
-
-    def search(self):
-        """Search database."""
-        return self.session.query(Match).all()
-
-    def query(self, query_type, **kwargs):
-        """Query database."""
-        if query_type == QUERY_MATCH:
-            return queries.get_match(self.session, kwargs['match_id'])
-        if query_type == QUERY_FILE:
-            return queries.get_file(self.session, kwargs['file_id'])
-        if query_type == QUERY_SERIES:
-            return queries.get_series(self.session, kwargs['series_id'])
-        if query_type == QUERY_SUMMARY:
-            return queries.get_summary(self.session)
-        raise ValueError('unsupported query type')
 
     def _file_added(self, success): # pylint: disable=unused-argument
         """Callback when file is addded."""

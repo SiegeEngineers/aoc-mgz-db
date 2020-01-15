@@ -17,12 +17,11 @@ import voobly
 import mgz.const
 import mgz.summary
 
-from aocref.model import Series, Dataset, EventMap
 from mgzdb.platforms import PLATFORM_VOOBLY, VOOBLY_PLATFORMS
 from mgzdb.schema import (
     Match, SeriesMetadata, File, Ladder, Player,
     Team, User, Chat, Timeseries, Research, ObjectInstance, Market,
-    ObjectInstanceState
+    ObjectInstanceState, Series, Dataset, EventMap
 )
 from mgzdb.util import parse_filename, save_file
 from mgzdb.compress import compress, compress_tiles

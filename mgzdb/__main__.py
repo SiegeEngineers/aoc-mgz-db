@@ -14,7 +14,6 @@ CMD_QUERY = 'query'
 CMD_ADD = 'add'
 CMD_REMOVE = 'remove'
 CMD_GET = 'get'
-CMD_RESET = 'reset'
 CMD_BOOTSTRAP = 'bootstrap'
 SUBCMD_FILE = 'file'
 SUBCMD_MATCH = 'match'
@@ -109,11 +108,6 @@ def main(args): # pylint: disable=too-many-branches
             handle.write(data)
         print(output_filename)
 
-    # Reset
-    elif args.cmd == CMD_RESET:
-        if input('reset database completely? [y/N] ') == 'y':
-            db_api.reset()
-
 
 def setup():
     """Setup CLI."""
@@ -206,9 +200,6 @@ def setup():
     get = subparsers.add_parser(CMD_GET)
     get.add_argument('file')
     get.add_argument('-o', '--output-path')
-
-    # "reset" command
-    subparsers.add_parser(CMD_RESET)
 
     # "bootstrap" command
     subparsers.add_parser(CMD_BOOTSTRAP)
