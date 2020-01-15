@@ -13,10 +13,8 @@ setup(
     install_requires=[
         'python-aoc-qq>=1.0.1',
         'coloredlogs>=10.0',
-        'iso8601>=0.1.12',
         'mgz>=1.2.5',
         'requests>=2.20.1',
-        'requests-cache>=0.4.13',
         'SQLAlchemy>=1.2.14',
         'tqdm>=4.28.1',
         'voobly>=1.2.9'

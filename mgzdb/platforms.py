@@ -1,6 +1,6 @@
 """Platform interface."""
 
-import requests_cache
+import requests
 from requests.exceptions import RequestException
 
 import aocqq
@@ -132,5 +132,5 @@ def factory(voobly_key=None, voobly_username=None, voobly_password=None):
         password=voobly_password,
         version=id
     )) for id in VOOBLY_PLATFORMS})
-    sessions[PLATFORM_QQ] = QQSession(requests_cache.CachedSession(backend='memory'))
+    sessions[PLATFORM_QQ] = QQSession(requests.session())
     return sessions

@@ -61,7 +61,6 @@ class AddFile:
         self.store_path = store_path
         self.session = connections['session']
         self.platforms = connections['platforms']
-        self.aoe2map = connections['aoe2map']
         self.playback = connections['playback']
 
     def add_file( # pylint: disable=too-many-return-statements, too-many-branches

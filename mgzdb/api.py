@@ -8,9 +8,6 @@ import sys
 import tempfile
 import zipfile
 
-import iso8601
-import requests_cache
-
 import voobly
 from mgzdb import platforms
 from mgzdb.add import add_file
@@ -60,7 +57,6 @@ class API: # pylint: disable=too-many-instance-attributes
             LOGGER.info('%s', playback)
             function.connections = {
                 'session': get_session(self.db_path)[0],
-                'aoe2map': requests_cache.CachedSession(backend='memory'),
                 'platforms': platforms.factory(
                     voobly_key=self.voobly_key,
                     voobly_username=self.voobly_username,

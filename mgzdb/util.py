@@ -64,6 +64,7 @@ def parse_series_path(path):
 
 
 def parse_filename(filename):
+    """Parse filename for useful data."""
     mgz = parse_filename_mgz(filename)
     de = parse_filename_de(filename)
     if mgz[0]:
@@ -74,6 +75,7 @@ def parse_filename(filename):
 
 
 def parse_filename_de(filename):
+    """Parse a Definitive Edition filename."""
     if not filename.startswith('MP Replay') or not filename.endswith(DE_EXT) or len(filename) < 45:
         return None, None
     return datetime(
@@ -87,7 +89,7 @@ def parse_filename_de(filename):
 
 
 def parse_filename_mgz(filename):
-    """Parse timestamp from default rec filename format."""
+    """Parse a Userpatch filename."""
     if not filename.startswith('rec.') or not filename.endswith(MGZ_EXT) or len(filename) != 23:
         return None, None
     return datetime(
