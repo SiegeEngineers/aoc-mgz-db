@@ -7,6 +7,9 @@ PLATFORM_VOOBLY = 'voobly'
 PLATFORM_VOOBLYCN = 'vooblycn'
 PLATFORM_QQ = 'qq'
 VOOBLY_PLATFORMS = [PLATFORM_VOOBLY, PLATFORM_VOOBLYCN]
+QQ_LADDERS = {
+    'W': 1
+}
 
 # pylint: disable=abstract-method
 
@@ -48,6 +51,10 @@ class PlatformSession():
         """Get clan matches."""
         raise NotImplementedError()
 
+    def lookup_ladder_id(self, ladder_name):
+        """Get ladder ID."""
+        raise NotImplementedError()
+
 
 class VooblySession(PlatformSession):
     """Voobly Platform (global & cn)."""
@@ -68,7 +75,10 @@ class VooblySession(PlatformSession):
 
     def find_user(self, user_id):
         """Find a user."""
-        return voobly.find_user_anon(self.session, user_id)
+        try:
+            return voobly.find_user_anon(self.session, user_id)
+        except voobly.VooblyError:
+            raise RuntimeError('could not find user')
 
     def get_ladder_matches(self, ladder_id, from_timestamp=None, limit=None):
         """Get ladder matches."""
@@ -85,6 +95,10 @@ class VooblySession(PlatformSession):
     def get_clan_matches(self, subdomain, clan_id, from_timestamp=None, limit=None):
         """Get clan matches."""
         return voobly.get_clan_matches(self.session, subdomain, clan_id, from_timestamp, limit)
+
+    def lookup_ladder_id(self, ladder_name):
+        """Lookup ladder ID."""
+        return voobly.lookup_ladder_id(ladder_name)
 
 
 class QQSession(PlatformSession):
@@ -118,6 +132,13 @@ class QQSession(PlatformSession):
     def get_user_matches(self, user_id, from_timestamp=None, limit=None):
         """Get user matches."""
         return aocqq.get_user_matches(self.session, user_id, limit)
+
+    def lookup_ladder_id(self, ladder_name):
+        """Lookup ladder ID."""
+        try:
+            return QQ_LADDERS[ladder_name]
+        except KeyError:
+            raise ValueError('could not find ladder id')
 
 
 def factory(voobly_key=None, voobly_username=None, voobly_password=None):

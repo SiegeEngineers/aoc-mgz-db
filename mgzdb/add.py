@@ -11,7 +11,6 @@ import pkg_resources
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 from sqlalchemy.exc import IntegrityError
 
-import voobly
 import mgz.summary
 
 from mgzdb.platforms import PLATFORM_VOOBLY, VOOBLY_PLATFORMS
@@ -22,32 +21,54 @@ from mgzdb.schema import (
 )
 from mgzdb.util import parse_filename, save_file
 from mgzdb.compress import compress, compress_tiles
+from mgzdb.extract import save_extraction
 
 
 LOGGER = logging.getLogger(__name__)
 LOG_ID_LENGTH = 8
 COMPRESSED_EXT = '.mgc'
 
-"""
-def add_file(
-        store_path, rec_path, reference,
-        series=None, series_id=None, platform_id=None,
-        platform_match_id=None, played=None, ladder=None,
-        user_data=None
-    ):
-    obj = AddFile(
-        add_file.connections, store_path # pylint: disable=no-member
-    )
-    try:
-        return obj.add_file(
-            rec_path, reference, series_name=series,
-            series_id=series_id, platform_id=platform_id,
-            platform_match_id=platform_match_id, played=played,
-            ladder=ladder, user_data=user_data
-        )
-    except KeyboardInterrupt:
-        sys.exit()
-"""
+def has_transposition(user_data, players):
+    if not user_data:
+        return False
+    from_rec = {}
+    for player in players:
+        from_rec[player['color_id']] = player['name']
+    from_user_data = {}
+    for user in user_data:
+        from_user_data[user['color_id']] = user['username']
+    strike = 0
+    for color_id, name in from_rec.items():
+        if (
+            color_id not in from_user_data or
+            from_user_data[color_id].lower() not in name.lower() and
+            name.lower() not in from_user_data[color_id].lower()
+        ):
+            strike += 1
+    if strike >= len(players) / 2:
+        return True
+    return False
+
+
+def merge_platform_attributes(ladder, platform_id, match_id, data, platforms):
+    """Merge various platform attributes."""
+    rated = data['rated']
+    if ladder:
+        rated = True
+    if not ladder:
+        ladder = data['ladder']
+    if data['platform_id'] and not platform_id:
+        platform_id = data['platform_id']
+    if data['platform_match_id'] and not match_id:
+        match_id = data['platform_match_id']
+    ladder_id = None
+    if platform_id:
+        try:
+            ladder_id = platforms[platform_id].lookup_ladder_id(ladder)
+        except ValueError:
+            ladder_id = None
+    return rated, ladder_id, platform_id, match_id
+
 
 class AddFile:
     """Add file to MGZ Database."""
@@ -172,15 +193,8 @@ class AddFile:
 
         log_id = match_hash[:LOG_ID_LENGTH]
         platform_data = summary.get_platform()
-        rated = platform_data['rated']
-        if ladder:
-            rated = True
-        if not ladder:
-            ladder = platform_data['ladder']
-        if platform_data['platform_id'] and not platform_id:
-            platform_id = platform_data['platform_id']
-        if platform_data['platform_match_id'] and not platform_match_id:
-            platform_match_id = platform_data['platform_match_id']
+        rated, ladder_id, platform_id, platform_match_id = merge_platform_attributes(ladder, platform_id, platform_match_id, platform_data, self.platforms)
+
         settings = summary.get_settings()
         try:
             map_data = summary.get_map()
@@ -216,39 +230,9 @@ class AddFile:
             LOGGER.error("[m:%s] has mismatched user data", log_id)
             return False
 
-        if user_data:
-            from_rec = {}
-            for player in players:
-                from_rec[player['color_id']] = player['name']
-            from_user_data = {}
-            for user in user_data:
-                from_user_data[user['color_id']] = user['username']
-            strike = 0
-            for color_id, name in from_rec.items():
-                if (
-                        color_id not in from_user_data or
-                        from_user_data[color_id].lower() not in name.lower() and
-                        name.lower() not in from_user_data[color_id].lower()
-                    ):
-                    strike += 1
-            if strike >= len(players) / 2:
-                LOGGER.error("[m:%s] has mismatched user data (transposition)", log_id)
-                return False
-
-        ladder_id = None
-        if platform_id:
-            try:
-                if platform_id in VOOBLY_PLATFORMS:
-                    ladder_id = voobly.lookup_ladder_id(ladder)
-                elif platform_id == 'aocqq':
-                    ladder_id = 1 # fix..
-                if ladder_id:
-                    ladder = self._get_unique(
-                        Ladder, keys=['id', 'platform_id'], id=ladder_id,
-                        platform_id=platform_id, name=ladder
-                    )
-            except ValueError:
-                ladder_id = None
+        if has_transposition(user_data, players):
+            LOGGER.error("[m:%s] has mismatched user data (transposition)", log_id)
+            return False
 
         try:
             dataset = self.session.query(Dataset).filter_by(id=dataset_data['id']).one()
@@ -394,45 +378,7 @@ class AddFile:
                 self._guess_match_user(player, data['name'])
 
         match.winning_team_id = winning_team_id
-
-        rate_sum = 0
-        for p in players:
-            if p.get('rate_snapshot'):
-                rate_sum += p.get('rate_snapshot')
-        rate_avg = rate_sum / len(players)
-        if False and summary._playback and ladder_id in [131] and dataset_data['id'] == 1 and rate_avg > 1700:
-            LOGGER.info("[m:%s] starting full extraction", log_id)
-            try:
-                extracted = summary.extract()
-                objs = []
-                for chat in extracted['chat']:
-                    if chat['type'] != 'chat':
-                        continue
-                    del chat['type']
-                    chat['timestamp'] = timedelta(milliseconds=chat['timestamp'])
-                    objs.append(Chat(match_id=match.id, **chat))
-                for record in extracted['timeseries']:
-                    record['timestamp'] = timedelta(milliseconds=record['timestamp'])
-                    objs.append(Timeseries(match_id=match.id, **record))
-                for record in extracted['market']:
-                    record['timestamp'] = timedelta(milliseconds=record['timestamp'])
-                    objs.append(Market(match_id=match.id, **record))
-                for record in extracted['research']:
-                    record['started'] = timedelta(milliseconds=record['started'])
-                    record['finished'] = timedelta(milliseconds=record['finished']) if record['finished'] else None
-                    objs.append(Research(match_id=match.id, dataset_id=dataset_data['id'], **record))
-                for record in extracted['objects']:
-                    record['created'] = timedelta(milliseconds=record['created'])
-                    record['destroyed'] = timedelta(milliseconds=record['destroyed']) if record['destroyed'] else None
-                    objs.append(ObjectInstance(match_id=match.id, dataset_id=dataset_data['id'], **record))
-                for record in extracted['state']:
-                    record['timestamp'] = timedelta(milliseconds=record['timestamp'])
-                    objs.append(ObjectInstanceState(match_id=match.id, dataset_id=dataset_data['id'], **record))
-                self.session.bulk_save_objects(objs)
-                self.session.commit()
-            except RuntimeError:
-                LOGGER.warning("[m:%s] failed to complete extraction", log_id)
-
+        save_extraction(self.session, summary, ladder_id, match.id, log_id)
         return match
 
     def _update_match_users(self, platform_id, match_id, user_data):
@@ -466,7 +412,7 @@ class AddFile:
                 platform_id=PLATFORM_VOOBLY
             )
             player.user_id = user_id
-        except voobly.VooblyError as error:
+        except RuntimeError as error:
             LOGGER.warning("failed to lookup Voobly user: %s", error)
 
     def _handle_series(self, series_id, series_name, map_data, log_id):
