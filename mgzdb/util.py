@@ -3,6 +3,9 @@ import os
 import re
 from datetime import datetime
 
+from sqlalchemy.orm.exc import NoResultFound
+from sqlalchemy.exc import IntegrityError
+
 
 MGZ_EXT = '.mgz'
 DE_EXT = '.aoe2record'
@@ -105,3 +108,31 @@ def parse_filename_mgz(filename):
 def get_utc_now():
     """Get current timestamp."""
     return datetime.utcnow()
+
+
+def _get_by_keys(session, table, keys, **kwargs):
+    """Get object by unique keys."""
+    return session.query(table).filter_by(**{k:kwargs[k] for k in keys}).one()
+
+
+def get_unique(session, table, keys=None, **kwargs):
+    """Get unique object either by query or creation."""
+    if not keys:
+        keys = ['name']
+    if not any([kwargs[k] is not None for k in keys]):
+        return None
+    try:
+        return _get_by_keys(table, keys, **kwargs)
+    except NoResultFound:
+        session.begin_nested()
+        try:
+            obj = table(**kwargs)
+            session.add(obj)
+            session.commit()
+            return obj
+        except IntegrityError:
+            session.rollback()
+            try:
+                return _get_by_keys(table, keys, **kwargs)
+            except NoResultFound:
+                raise RuntimeError

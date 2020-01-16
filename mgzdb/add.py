@@ -15,11 +15,10 @@ import mgz.summary
 
 from mgzdb.platforms import PLATFORM_VOOBLY, VOOBLY_PLATFORMS
 from mgzdb.schema import (
-    Match, SeriesMetadata, File, Ladder, Player,
-    Team, User, Chat, Timeseries, Research, ObjectInstance, Market,
-    ObjectInstanceState, Series, Dataset, EventMap
+    Match, SeriesMetadata, File, Player,
+    Team, User, Series, Dataset, EventMap
 )
-from mgzdb.util import parse_filename, save_file
+from mgzdb.util import parse_filename, save_file, get_unique
 from mgzdb.compress import compress, compress_tiles
 from mgzdb.extract import save_extraction
 
@@ -70,6 +69,19 @@ def merge_platform_attributes(ladder, platform_id, match_id, data, platforms):
     return rated, ladder_id, platform_id, match_id
 
 
+def file_exists(session, file_hash):
+    """Check if a file exists.
+
+    Update the series_id if necessary.
+    """
+    exists = session.query(File).filter_by(hash=file_hash).one_or_none()
+    if exists:
+        exists.match.series_id = series_id
+        self.session.commit()
+        return True
+    return False
+
+
 class AddFile:
     """Add file to MGZ Database."""
 
@@ -109,16 +121,19 @@ class AddFile:
         except LookupError:
             LOGGER.error("[f] unknown encoding")
             return False
-
-        exists = self.session.query(File).filter_by(hash=file_hash).one_or_none()
-        if exists:
-            LOGGER.warning("[f:%s] file already exists", log_id)
-            print(series_name, series_id, exists.match_id)
-            exists.match.series_id = series_id
-            self.session.commit()
+        except ValueError as error:
+            LOGGER.error("[f] error: %s", error)
             return False
 
-        encoding = summary.get_encoding()
+        if file_exists(self.session, file_hash):
+            LOGGER.warning("[f:%s] file already exists", log_id)
+            return False
+
+        try:
+            encoding = summary.get_encoding()
+        except ValueError as error:
+            LOGGER.error("[f] error: %s", error)
+            return False
         match_hash_obj = summary.get_hash()
         if not match_hash_obj:
             LOGGER.error("f:%s] not enough data to calculate safe match hash", log_id)
@@ -154,7 +169,8 @@ class AddFile:
         compressed_filename, compressed_size = self._handle_file(file_hash, data)
 
         try:
-            new_file = self._get_unique(
+            new_file = get_unique(
+                self.session,
                 File, ['hash'],
                 filename=compressed_filename,
                 original_filename=original_filename,
@@ -246,7 +262,8 @@ class AddFile:
             played = series.played
 
 
-        match = self._get_unique(
+        match = get_unique(
+            self.session,
             Match, ['hash', 'platform_match_id'],
             platform_match_id=platform_match_id,
             platform_id=platform_id,
@@ -311,7 +328,8 @@ class AddFile:
             castle_time = data['achievements']['technology']['castle_time']
             imperial_time = data['achievements']['technology']['imperial_time']
             try:
-                self._get_unique(
+                get_unique(
+                    self.session,
                     Team,
                     ['match', 'team_id'],
                     winner=(team_id == winning_team_id),
@@ -319,8 +337,9 @@ class AddFile:
                     team_id=team_id
                 )
                 if data['user_id']:
-                    self._get_unique(User, ['id', 'platform_id'], id=str(data['user_id']), platform_id=platform_id)
-                player = self._get_unique(
+                    get_unique(self.session, User, ['id', 'platform_id'], id=str(data['user_id']), platform_id=platform_id)
+                player = get_unique(
+                    self.session,
                     Player,
                     ['match_id', 'number'],
                     civilization_id=int(data['civilization']),
@@ -383,30 +402,32 @@ class AddFile:
 
     def _update_match_users(self, platform_id, match_id, user_data):
         """Update Voobly User info on Match."""
-        if user_data:
-            for user in user_data:
-                try:
-                    player = self.session.query(Player).filter_by(match_id=match_id, color_id=user['color_id']).one()
-                except NoResultFound:
-                    LOGGER.error("failed to find p%d to update platform user data",
-                                 user['color_id'] + 1)
-                    continue
-                LOGGER.info("[m:%s] updating platform user data for p%d",
-                            player.match.hash[:LOG_ID_LENGTH], user['color_id'] + 1)
-                self._get_unique(User, ['id', 'platform_id'], id=str(user['id']), platform_id=platform_id)
-                player.user_id = str(user['id'])
-                player.user_name = user.get('username')
-                player.platform_id = platform_id
-                player.rate_before = user.get('rate_before')
-                player.rate_after = user.get('rate_after')
-                if not player.rate_snapshot:
-                    player.rate_snapshot = user.get('rate_snapshot')
+        if not user_data:
+            return
+        for user in user_data:
+            try:
+                player = self.session.query(Player).filter_by(match_id=match_id, color_id=user['color_id']).one()
+            except NoResultFound:
+                LOGGER.error("failed to find p%d to update platform user data",
+                             user['color_id'] + 1)
+                continue
+            LOGGER.info("[m:%s] updating platform user data for p%d",
+                        player.match.hash[:LOG_ID_LENGTH], user['color_id'] + 1)
+            get_unique(self.session, User, ['id', 'platform_id'], id=str(user['id']), platform_id=platform_id)
+            player.user_id = str(user['id'])
+            player.user_name = user.get('username')
+            player.platform_id = platform_id
+            player.rate_before = user.get('rate_before')
+            player.rate_after = user.get('rate_after')
+            if not player.rate_snapshot:
+                player.rate_snapshot = user.get('rate_snapshot')
 
     def _guess_match_user(self, player, name):
         """Guess Voobly User from a player name."""
         try:
             user_id = str(self.platforms[PLATFORM_VOOBLY].find_user(name.lstrip('+')))
-            self._get_unique(
+            get_unique(
+                self.session,
                 User, ['id', 'platform_id'],
                 id=user_id,
                 platform_id=PLATFORM_VOOBLY
@@ -420,7 +441,8 @@ class AddFile:
         if series_id and series_name:
             series = self.session.query(Series).get(series_id)
             if series:
-                self._get_unique(
+                get_unique(
+                    self.session,
                     SeriesMetadata,
                     ['series_id'],
                     name=series_name,
@@ -455,29 +477,3 @@ class AddFile:
         destination = save_file(compressed_data, self.store_path, compressed_filename)
         LOGGER.info("[f:%s] copied to %s", file_hash[:LOG_ID_LENGTH], destination)
         return compressed_filename, len(compressed_data)
-
-    def _get_by_keys(self, table, keys, **kwargs):
-        """Get object by unique keys."""
-        return self.session.query(table).filter_by(**{k:kwargs[k] for k in keys}).one()
-
-    def _get_unique(self, table, keys=None, **kwargs):
-        """Get unique object either by query or creation."""
-        if not keys:
-            keys = ['name']
-        if not any([kwargs[k] is not None for k in keys]):
-            return None
-        try:
-            return self._get_by_keys(table, keys, **kwargs)
-        except NoResultFound:
-            self.session.begin_nested()
-            try:
-                obj = table(**kwargs)
-                self.session.add(obj)
-                self.session.commit()
-                return obj
-            except IntegrityError:
-                self.session.rollback()
-                try:
-                    return self._get_by_keys(table, keys, **kwargs)
-                except NoResultFound:
-                    raise RuntimeError

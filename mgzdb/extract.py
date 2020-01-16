@@ -2,6 +2,11 @@
 import logging
 from datetime import timedelta
 
+from mgzdb.schema import (
+    Chat, Timeseries, Research, ObjectInstance, Market,
+    ObjectInstanceState
+)
+
 
 LOGGER = logging.getLogger(__name__)
 ALLOWED = False
