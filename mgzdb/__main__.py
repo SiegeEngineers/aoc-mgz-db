@@ -5,6 +5,7 @@ import logging
 import os
 
 import coloredlogs
+from mgzdb import platforms
 from mgzdb.api import API
 from mgzdb.util import parse_series_path
 
@@ -21,13 +22,13 @@ DEFAULT_DB = 'sqlite:///data.db'
 def main(args): # pylint: disable=too-many-branches
     """Handle arguments."""
 
-    db_api = API(
-        args.database, args.store_path,
-        playback=args.playback,
-        voobly_key=args.voobly_key,
+    sessions = platforms.factory(
         voobly_username=args.voobly_username,
-        voobly_password=args.voobly_password
+        voobly_password=args.voobly_password,
+        voobly_key=args.voobly_key
     )
+
+    db_api = API(args.database, args.store_path, sessions, args.playback)
 
     # Add
     if args.cmd == CMD_ADD:

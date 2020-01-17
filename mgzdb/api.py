@@ -5,7 +5,6 @@ import os
 import tempfile
 import zipfile
 
-from mgzdb import platforms
 from mgzdb.add import AddFile
 from mgzdb.compress import decompress
 from mgzdb.schema import get_session, File, Match
@@ -18,19 +17,18 @@ LOGGER = logging.getLogger(__name__)
 class API: # pylint: disable=too-many-instance-attributes
     """MGZ Database API."""
 
-    def __init__(self, db_path, store_path, **kwargs):
+    def __init__(self, db_path, store_path, platforms, playback):
         """Initialize sessions."""
         self.session, _ = get_session(db_path)
         self.temp_dir = tempfile.TemporaryDirectory()
         self.store_path = store_path
-        self.platforms = platforms.factory(
-            voobly_key=kwargs.get('voobly_key'),
-            voobly_username=kwargs.get('voobly_username'),
-            voobly_password=kwargs.get('voobly_password')
-        )
-        self.af = AddFile(self.session, self.platforms, self.store_path, kwargs.get('playback'))
+        self.platforms = platforms
+        self.af = AddFile(self.session, self.platforms, self.store_path, playback)
         LOGGER.info("connected to database @ %s", db_path)
 
+    def has_match(self, platform_id, match_id):
+        """Check if a platform match exists."""
+        return self.session.query(Match).filter_by(platform_id=platform_id, platform_match_id=match_id).one_or_none() is not None
 
     def add_file(self, *args, **kwargs):
         """Add file via process pool."""

@@ -122,7 +122,7 @@ def get_unique(session, table, keys=None, **kwargs):
     if not any([kwargs[k] is not None for k in keys]):
         return None
     try:
-        return _get_by_keys(table, keys, **kwargs)
+        return _get_by_keys(session, table, keys, **kwargs)
     except NoResultFound:
         session.begin_nested()
         try:
@@ -133,6 +133,6 @@ def get_unique(session, table, keys=None, **kwargs):
         except IntegrityError:
             session.rollback()
             try:
-                return _get_by_keys(table, keys, **kwargs)
+                return _get_by_keys(session, table, keys, **kwargs)
             except NoResultFound:
                 raise RuntimeError

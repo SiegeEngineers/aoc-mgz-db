@@ -69,7 +69,7 @@ def merge_platform_attributes(ladder, platform_id, match_id, data, platforms):
     return rated, ladder_id, platform_id, match_id
 
 
-def file_exists(session, file_hash):
+def file_exists(session, file_hash, series_id):
     """Check if a file exists.
 
     Update the series_id if necessary.
@@ -77,7 +77,7 @@ def file_exists(session, file_hash):
     exists = session.query(File).filter_by(hash=file_hash).one_or_none()
     if exists:
         exists.match.series_id = series_id
-        self.session.commit()
+        session.commit()
         return True
     return False
 
@@ -125,7 +125,7 @@ class AddFile:
             LOGGER.error("[f] error: %s", error)
             return False
 
-        if file_exists(self.session, file_hash):
+        if file_exists(self.session, file_hash, series_id):
             LOGGER.warning("[f:%s] file already exists", log_id)
             return False
 
@@ -397,7 +397,7 @@ class AddFile:
                 self._guess_match_user(player, data['name'])
 
         match.winning_team_id = winning_team_id
-        save_extraction(self.session, summary, ladder_id, match.id, log_id)
+        save_extraction(self.session, summary, ladder_id, match.id, dataset_data['id'], log_id)
         return match
 
     def _update_match_users(self, platform_id, match_id, user_data):

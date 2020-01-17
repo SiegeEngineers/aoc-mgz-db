@@ -9,9 +9,9 @@ from mgzdb.schema import (
 
 
 LOGGER = logging.getLogger(__name__)
-ALLOWED = False
+ALLOWED = True
 ALLOWED_LADDERS = [131]
-ALLOWED_RATE = 1700
+ALLOWED_RATE = 1800
 
 
 def allow_extraction(players, ladder_id):
@@ -21,7 +21,7 @@ def allow_extraction(players, ladder_id):
     return ALLOWED and ladder_id in ALLOWED_LADDERS and rate_avg > ALLOWED_RATE
 
 
-def save_extraction(session, summary, ladder_id, match_id, log_id):
+def save_extraction(session, summary, ladder_id, match_id, dataset_id, log_id):
     """Commit extraction data when available."""
     if not summary.can_playback() or not allow_extraction(list(summary.get_players()), ladder_id):
         return False
@@ -47,14 +47,14 @@ def save_extraction(session, summary, ladder_id, match_id, log_id):
     for record in extracted['research']:
         record['started'] = timedelta(milliseconds=record['started'])
         record['finished'] = timedelta(milliseconds=record['finished']) if record['finished'] else None
-        objs.append(Research(match_id=match_id, dataset_id=dataset_data['id'], **record))
+        objs.append(Research(match_id=match_id, dataset_id=dataset_id, **record))
     for record in extracted['objects']:
         record['created'] = timedelta(milliseconds=record['created'])
         record['destroyed'] = timedelta(milliseconds=record['destroyed']) if record['destroyed'] else None
-        objs.append(ObjectInstance(match_id=match_id, dataset_id=dataset_data['id'], **record))
+        objs.append(ObjectInstance(match_id=match_id, dataset_id=dataset_id, **record))
     for record in extracted['state']:
         record['timestamp'] = timedelta(milliseconds=record['timestamp'])
-        objs.append(ObjectInstanceState(match_id=match_id, dataset_id=dataset_data['id'], **record))
+        objs.append(ObjectInstanceState(match_id=match_id, dataset_id=dataset_id, **record))
     session.bulk_save_objects(objs)
     session.commit()
     return True
