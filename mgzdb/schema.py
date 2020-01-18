@@ -337,6 +337,7 @@ class Match(BASE):
     all_technologies = Column(Boolean)
     lock_speed = Column(Boolean)
     multiqueue = Column(Boolean)
+    has_playback = Column(Boolean)
     __table_args__ = (
         ForeignKeyConstraint(['ladder_id', 'platform_id'], ['ladders.id', 'ladders.platform_id']),
         ForeignKeyConstraint(['builtin_map_id', 'dataset_id'], ['maps.id', 'maps.dataset_id'])
@@ -561,3 +562,9 @@ class Market(BASE):
     wood = Column(Float)
     stone = Column(Float)
     food = Column(Float)
+
+
+class Version(BASE):
+    __tablename__ = 'versions'
+    id = Column(Integer, primary_key=True)
+    name = String()
