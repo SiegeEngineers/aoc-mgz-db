@@ -220,7 +220,7 @@ class AddFile:
         completed = summary.get_completed()
         restored, _ = summary.get_restored()
         has_postgame = bool(postgame)
-        major_version, minor_version = summary.get_version()
+        version_id, game_version, save_version = summary.get_version()
         try:
             dataset_data = summary.get_dataset()
         except ValueError:
@@ -272,8 +272,9 @@ class AddFile:
             series=series,
             tournament=tournament,
             event=event,
-            version=major_version,
-            minor_version=minor_version,
+            version_id=version_id.value,
+            game_version=game_version,
+            save_version=round(save_version, 2),
             build=build,
             dataset=dataset,
             dataset_version=dataset_data['version'],
@@ -397,7 +398,8 @@ class AddFile:
                 self._guess_match_user(player, data['name'])
 
         match.winning_team_id = winning_team_id
-        save_extraction(self.session, summary, ladder_id, match.id, dataset_data['id'], log_id)
+        if save_extraction(self.session, summary, ladder_id, match.id, dataset_data['id'], log_id):
+            match.has_playback = True
         return match
 
     def _update_match_users(self, platform_id, match_id, user_data):

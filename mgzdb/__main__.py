@@ -33,8 +33,6 @@ def main(args): # pylint: disable=too-many-branches
     # Add
     if args.cmd == CMD_ADD:
 
-        db_api.start()
-
         # File
         if args.subcmd == SUBCMD_FILE:
             for rec in args.rec_path:

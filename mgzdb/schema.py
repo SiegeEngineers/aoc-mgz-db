@@ -280,6 +280,9 @@ class Match(BASE):
     files = relationship('File', foreign_keys='File.match_id', cascade='all, delete, delete-orphan', post_update=True)
     version = Column(String)
     minor_version = Column(String)
+    version_id = Column(Integer, ForeignKey('versions.id'))
+    game_version = Column(String)
+    save_version = Column(Float)
     build = Column(String)
     dataset_id = Column(Integer, ForeignKey('datasets.id'), index=True)
     dataset_version = Column(String)
@@ -567,4 +570,4 @@ class Market(BASE):
 class Version(BASE):
     __tablename__ = 'versions'
     id = Column(Integer, primary_key=True)
-    name = String()
+    name = Column(String)
