@@ -11,7 +11,7 @@ from mgzdb.schema import (
 LOGGER = logging.getLogger(__name__)
 ALLOWED = True
 ALLOWED_LADDERS = [131]
-ALLOWED_RATE = 1800
+ALLOWED_RATE = 1700
 
 
 def allow_extraction(players, ladder_id):

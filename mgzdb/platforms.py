@@ -1,5 +1,6 @@
 """Platform interface."""
 
+import datetime
 import aocqq
 import voobly
 
@@ -154,7 +155,8 @@ def factory(voobly_key=None, voobly_username=None, voobly_password=None):
         key=voobly_key,
         username=voobly_username,
         password=voobly_password,
-        version=id
+        version=id,
+        cache_expiry=datetime.timedelta(seconds=1)
     )) for id in VOOBLY_PLATFORMS})
     sessions[PLATFORM_QQ] = QQSession(aocqq.get_session())
     return sessions
