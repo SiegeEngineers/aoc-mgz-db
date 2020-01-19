@@ -3,7 +3,7 @@ import logging
 from datetime import timedelta
 
 from mgzdb.schema import (
-    Chat, Timeseries, Research, ObjectInstance, Market,
+    Timeseries, Research, ObjectInstance, Market,
     ObjectInstanceState
 )
 
@@ -32,12 +32,6 @@ def save_extraction(session, summary, ladder_id, match_id, dataset_id, log_id):
         LOGGER.warning("[m:%s] failed to complete extraction", log_id)
         return False
     objs = []
-    for chat in extracted['chat']:
-        if chat['type'] != 'chat':
-            continue
-        del chat['type']
-        chat['timestamp'] = timedelta(milliseconds=chat['timestamp'])
-        objs.append(Chat(match_id=match_id, **chat))
     for record in extracted['timeseries']:
         record['timestamp'] = timedelta(milliseconds=record['timestamp'])
         objs.append(Timeseries(match_id=match_id, **record))

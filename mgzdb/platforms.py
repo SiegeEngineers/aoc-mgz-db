@@ -82,7 +82,10 @@ class VooblySession(PlatformSession):
 
     def get_ladder_matches(self, ladder_id, from_timestamp=None, limit=None):
         """Get ladder matches."""
-        return voobly.get_ladder_matches(self.session, ladder_id, from_timestamp, limit)
+        try:
+            return voobly.get_ladder_matches(self.session, ladder_id, from_timestamp, limit)
+        except voobly.VooblyError:
+            raise RuntimeError('could not get ladder')
 
     def get_ladder(self, ladder_id, start=0, limit=None):
         """Get ladder ranks."""

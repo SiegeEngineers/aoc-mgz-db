@@ -16,11 +16,12 @@ import mgz.summary
 from mgzdb.platforms import PLATFORM_VOOBLY, VOOBLY_PLATFORMS
 from mgzdb.schema import (
     Match, SeriesMetadata, File, Player,
-    Team, User, Series, Dataset, EventMap
+    Team, User, Series, Dataset, EventMap, Chat
 )
 from mgzdb.util import parse_filename, save_file, get_unique
 from mgzdb.compress import compress, compress_tiles
 from mgzdb.extract import save_extraction
+from mgz.summary.chat import Chat as ChatType
 
 
 LOGGER = logging.getLogger(__name__)
@@ -80,6 +81,19 @@ def file_exists(session, file_hash, series_id):
         session.commit()
         return True
     return False
+
+
+def save_chat(session, chats, match_id):
+    """Save chat messages."""
+    objs = []
+    for chat in chats:
+        if chat['type'] != ChatType.MESSAGE:
+            continue
+        del chat['type']
+        chat['timestamp'] = timedelta(milliseconds=chat['timestamp'])
+        objs.append(Chat(match_id=match_id, **chat))
+    session.bulk_save_objects(objs)
+    session.commit()
 
 
 class AddFile:
@@ -400,6 +414,7 @@ class AddFile:
         match.winning_team_id = winning_team_id
         if save_extraction(self.session, summary, ladder_id, match.id, dataset_data['id'], log_id):
             match.has_playback = True
+        save_chat(self.session, summary.get_chat(), match.id)
         return match
 
     def _update_match_users(self, platform_id, match_id, user_data):
