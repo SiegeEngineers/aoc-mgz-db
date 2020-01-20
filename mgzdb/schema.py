@@ -43,6 +43,7 @@ class Event(BASE):
     __tablename__ = 'events'
     id = Column(String, primary_key=True)
     name = Column(String)
+    year = Column(Integer)
 
 
 class Tournament(BASE):

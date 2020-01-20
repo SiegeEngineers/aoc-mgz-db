@@ -15,6 +15,8 @@ import struct
 import time
 import zlib
 
+from mgz.util import Version
+
 
 PREFIX_SIZE = 8
 LOGGER = logging.getLogger(__name__)
@@ -29,38 +31,57 @@ LZMA_FILTERS = [
 ]
 
 
-def compress(data):
+def compress(data, version=None):
     """Compress from file."""
     start = time.time()
-    header_len, _ = struct.unpack('<II', data.read(PREFIX_SIZE))
-    zlib_header = data.read(header_len - PREFIX_SIZE)
+    if version == Version.AOK:
+        prefix_size = 4
+        header_len, = struct.unpack('<I', data.read(prefix_size))
+    else:
+        prefix_size = 8
+        header_len, next_header = struct.unpack('<II', data.read(prefix_size))
+    zlib_header = data.read(header_len - prefix_size)
     header = zlib.decompress(zlib_header, wbits=ZLIB_WBITS)
     lzma_header = lzma.compress(header, filters=LZMA_FILTERS)
 
     body = data.read()
     lzma_body = lzma.compress(body, filters=LZMA_FILTERS)
 
-    size = PREFIX_SIZE + len(zlib_header) + len(body)
-    new_size = PREFIX_SIZE + len(lzma_header) + len(lzma_body)
+    size = prefix_size + len(zlib_header) + len(body)
+    new_size = prefix_size + len(lzma_header) + len(lzma_body)
 
     LOGGER.info("compressed input to %.1f%% of original size (%d->%d) in %.2f seconds",
                 (new_size / size) * 100, size, new_size, time.time() - start)
-    return struct.pack('<II', len(lzma_header) + PREFIX_SIZE, 0) + lzma_header + lzma_body
+    if version == Version.AOK:
+        prefix = struct.pack('<I', len(lzma_header) + prefix_size)
+    else:
+        prefix = struct.pack('<II', len(lzma_header) + prefix_size, next_header)
+    return prefix + lzma_header + lzma_body
 
 
-def decompress(data):
+def decompress(data, version=None):
     """Decompress from file."""
     start = time.time()
 
-    header_len, _ = struct.unpack('<II', data.read(PREFIX_SIZE))
-    lzma_header = data.read(header_len - PREFIX_SIZE)
+    if version == Version.AOK:
+        prefix_size = 4
+        header_len, = struct.unpack('<I', data.read(prefix_size))
+    else:
+        prefix_size = 8
+        header_len, next_header = struct.unpack('<II', data.read(prefix_size))
+
+    lzma_header = data.read(header_len - prefix_size)
     header = lzma.decompress(lzma_header)
     zlib_header = zlib.compress(header)[2:]
 
     body = lzma.decompress(data.read())
 
     LOGGER.info("decompressed in %.2f seconds", time.time() - start)
-    return struct.pack('<II', len(zlib_header) + PREFIX_SIZE, 0) + zlib_header + body
+    if version == Version.AOK:
+        prefix = struct.pack('<I', len(zlib_header) + prefix_size)
+    else:
+        prefix = struct.pack('<II', len(zlib_header) + prefix_size, 0)
+    return prefix + zlib_header + body
 
 
 def compress_tiles(tiles):
