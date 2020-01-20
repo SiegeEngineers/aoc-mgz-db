@@ -21,6 +21,7 @@ from mgzdb.schema import (
 from mgzdb.util import parse_filename, save_file, get_unique
 from mgzdb.compress import compress, compress_tiles
 from mgzdb.extract import save_extraction
+from mgz.util import Version
 from mgz.summary.chat import Chat as ChatType
 
 
@@ -180,7 +181,7 @@ class AddFile:
                 LOGGER.error("[f:%s] constraint violation: could not add match", log_id)
                 return False
 
-        compressed_filename, compressed_size = self._handle_file(file_hash, data)
+        compressed_filename, compressed_size = self._handle_file(file_hash, data, Version(match.version_id))
 
         try:
             new_file = get_unique(
@@ -487,10 +488,10 @@ class AddFile:
             event_map_id = None
         return None, None, None, event_map_id
 
-    def _handle_file(self, file_hash, data):
+    def _handle_file(self, file_hash, data, version):
         """Handle file: compress and store."""
         compressed_filename = '{}{}'.format(file_hash, COMPRESSED_EXT)
-        compressed_data = compress(io.BytesIO(data))
+        compressed_data = compress(io.BytesIO(data), version=version)
         destination = save_file(compressed_data, self.store_path, compressed_filename)
         LOGGER.info("[f:%s] copied to %s", file_hash[:LOG_ID_LENGTH], destination)
         return compressed_filename, len(compressed_data)
