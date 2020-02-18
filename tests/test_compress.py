@@ -4,16 +4,23 @@ import unittest
 import zlib
 
 from mgz.util import Version
-from mgzdb.compress import compress, decompress, compress_tiles, decompress_tiles
+from mgzdb.compress import compress, decompress, compress_rev_1, decompress_rev_1, compress_tiles, decompress_tiles
 
 
 class TestCompress(unittest.TestCase):
 
-    def test_compress(self):
+    def test_compress_rev_1(self):
         header = zlib_header = zlib.compress(b'1' * 100)[2:]
         body = b'0' * 100
         rec = struct.pack('<II', len(header) + 8, 0) + header + body
-        compressed_rec = compress(io.BytesIO(rec))
+        compressed_rec = compress_rev_1(io.BytesIO(rec))
+        self.assertEqual(rec, decompress_rev_1(io.BytesIO(compressed_rec)))
+
+    def test_compress_fallback(self):
+        header = zlib_header = zlib.compress(b'1' * 100)[2:]
+        body = b'0' * 100
+        rec = struct.pack('<II', len(header) + 8, 0) + header + body
+        compressed_rec = compress_rev_1(io.BytesIO(rec))
         self.assertEqual(rec, decompress(io.BytesIO(compressed_rec)))
 
     def test_compress_aok(self):
@@ -22,6 +29,13 @@ class TestCompress(unittest.TestCase):
         rec = struct.pack('<I', len(header) + 4) + header + body
         compressed_rec = compress(io.BytesIO(rec), version=Version.AOK)
         self.assertEqual(rec, decompress(io.BytesIO(compressed_rec), version=Version.AOK))
+
+    def test_compress_rev_2(self):
+        header = zlib_header = zlib.compress(b'1' * 100)[2:]
+        body = b'0' * 100
+        rec = struct.pack('<II', len(header) + 8, 0) + header + body
+        compressed_rec = compress(io.BytesIO(rec))
+        self.assertEqual(rec, decompress(io.BytesIO(compressed_rec)))
 
     def test_compress_tiles(self):
         tiles = [

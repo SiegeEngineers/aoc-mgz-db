@@ -8,7 +8,6 @@ import zipfile
 from mgzdb.add import AddFile
 from mgzdb.compress import decompress
 from mgzdb.schema import get_session, File, Match
-from mgzdb.util import get_file
 
 
 LOGGER = logging.getLogger(__name__)
@@ -17,12 +16,13 @@ LOGGER = logging.getLogger(__name__)
 class API: # pylint: disable=too-many-instance-attributes
     """MGZ Database API."""
 
-    def __init__(self, db_path, store_path, platforms, playback):
+    def __init__(self, db_path, store_path, platforms, playback=None):
         """Initialize sessions."""
-        self.session, _ = get_session(db_path)
+        self.session, self.engine = get_session(db_path)
         self.temp_dir = tempfile.TemporaryDirectory()
         self.store_path = store_path
         self.platforms = platforms
+        self.playback = playback
         self.af = AddFile(self.session, self.platforms, self.store_path, playback)
         LOGGER.info("connected to database @ %s", db_path)
 
@@ -35,7 +35,7 @@ class API: # pylint: disable=too-many-instance-attributes
         LOGGER.info("processing file %s", args[0])
         self.af.add_file(*args, **kwargs)
 
-    def add_match(self, platform, url, single_pov=False):
+    def add_match(self, platform, url, single_pov=True):
         """Add a match via platform url."""
         if isinstance(url, str):
             match_id = url.split('/')[-1]
@@ -123,8 +123,3 @@ class API: # pylint: disable=too-many-instance-attributes
                 self.session.commit()
                 return
         print('not found')
-
-    def get(self, file_id):
-        """Get a file from the store."""
-        mgz_file = self.session.query(File).get(file_id)
-        return mgz_file.original_filename, decompress(get_file(self.store_path, mgz_file.filename))

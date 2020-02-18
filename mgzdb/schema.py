@@ -38,6 +38,14 @@ class CanonicalPlayer(BASE):
     name = Column(String)
 
 
+class Person(BASE):
+    """A known player."""
+    __tablename__ = 'people'
+    id = Column(Integer, primary_key=True)
+    name = Column(String, unique=True)
+    country = Column(String)
+
+
 class Event(BASE):
     """Event (one or more tournaments)."""
     __tablename__ = 'events'
@@ -342,6 +350,11 @@ class Match(BASE):
     lock_speed = Column(Boolean)
     multiqueue = Column(Boolean)
     has_playback = Column(Boolean)
+    object_instances = relationship('ObjectInstance', foreign_keys='ObjectInstance.match_id', cascade='all, delete, delete-orphan')
+    research = relationship('Research', foreign_keys='Research.match_id', cascade='all, delete, delete-orphan')
+    timeseries = relationship('Timeseries', foreign_keys='Timeseries.match_id', cascade='all, delete, delete-orphan')
+    market = relationship('Market', foreign_keys='Market.match_id', cascade='all, delete, delete-orphan')
+    hc = Column(Boolean)
     __table_args__ = (
         ForeignKeyConstraint(['ladder_id', 'platform_id'], ['ladders.id', 'ladders.platform_id']),
         ForeignKeyConstraint(['builtin_map_id', 'dataset_id'], ['maps.id', 'maps.dataset_id'])
@@ -427,6 +440,7 @@ class User(BASE):
     __tablename__ = 'users'
     id = Column(String, primary_key=True)
     platform_id = Column(String, ForeignKey('platforms.id'), primary_key=True)
+    person_id = Column(Integer, ForeignKey('people.id'))
     added = Column(DateTime, default=get_utc_now)
     __table_args__ = (
         UniqueConstraint('id', 'platform_id'),
@@ -525,12 +539,18 @@ class ObjectInstance(BASE):
     match_id = Column(Integer, ForeignKey('matches.id', ondelete='cascade'), index=True)
     dataset_id = Column(Integer, ForeignKey('datasets.id'), index=True)
     dataset = relationship('Dataset', foreign_keys=dataset_id)
+    states = relationship('ObjectInstanceState', foreign_keys='ObjectInstanceState.match_id', cascade='all, delete, delete-orphan')
     created = Column(Interval)
     destroyed = Column(Interval)
-    destroyed_by_instance_id = Column(Integer)
+    destroyed_by_instance_id = Column(Integer, index=True)
     deleted = Column(Boolean)
-    pos_x = Column(Float)
-    pos_y = Column(Float)
+    created_x = Column(Float)
+    created_y = Column(Float)
+    destroyed_x = Column(Float)
+    destroyed_y = Column(Float)
+    destroyed_building_percent = Column(Float)
+    building_started = Column(Interval)
+    building_completed = Column(Interval)
     __table_args__ = (
         UniqueConstraint('match_id', 'instance_id'),
     )
@@ -550,10 +570,12 @@ class ObjectInstanceState(BASE):
     object_id = Column(Integer, index=True)
     object = relationship('Object', foreign_keys=[object_id, dataset_id], viewonly=True)
     class_id = Column(Integer, index=True)
+    researching_technology_id = Column(Integer)
     __table_args__ = (
         ForeignKeyConstraint(['match_id', 'player_number'], ['players.match_id', 'players.number'], ondelete='cascade'),
         ForeignKeyConstraint(['dataset_id', 'object_id'], ['objects.dataset_id', 'objects.id']),
-
+        ForeignKeyConstraint(['instance_id', 'match_id'], ['object_instances.instance_id', 'object_instances.match_id'], ondelete='cascade'),
+        ForeignKeyConstraint(['dataset_id', 'researching_technology_id'], ['technologies.dataset_id', 'technologies.id'])
     )
 
 
@@ -561,7 +583,7 @@ class Market(BASE):
     __tablename__ = 'market'
     id = Column(Integer, primary_key=True)
     match_id = Column(Integer, ForeignKey('matches.id', ondelete='cascade'), index=True)
-    match = relationship('Match', foreign_keys=[match_id], backref='market')
+    match = relationship('Match', foreign_keys=[match_id])
     timestamp = Column(Interval)
     wood = Column(Float)
     stone = Column(Float)
@@ -572,3 +594,10 @@ class Version(BASE):
     __tablename__ = 'versions'
     id = Column(Integer, primary_key=True)
     name = Column(String)
+
+
+class HiddenCupPlayers(BASE):
+    __tablename__ = 'hc'
+    hc_name = Column(String, primary_key=True)
+    person_name = Column(String, primary_key=True)
+    event_id = Column(String)

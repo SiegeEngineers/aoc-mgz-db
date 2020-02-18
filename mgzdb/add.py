@@ -66,7 +66,7 @@ def merge_platform_attributes(ladder, platform_id, match_id, data, platforms):
     if platform_id:
         try:
             ladder_id = platforms[platform_id].lookup_ladder_id(ladder)
-        except ValueError:
+        except (KeyError, ValueError):
             ladder_id = None
     return rated, ladder_id, platform_id, match_id
 
