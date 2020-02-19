@@ -157,16 +157,16 @@ def compress_tiles(tiles):
 
 def decompress_tiles(cdata, dimension):
     """Decompress map tiles."""
-    x = 0
-    y = 0
+    x_coord = 0
+    y_coord = 0
     tiles = []
     data = lzma.decompress(cdata)
-    while y < dimension:
-        s = ((y * dimension) + x) * 2
-        terrain_id, elevation = struct.unpack('<bb', data[s:s+2])
-        tiles.append({'terrain_id': terrain_id, 'elevation': elevation, 'x': x, 'y': y})
-        x += 1
-        if x == dimension:
-            x = 0
-            y += 1
+    while y_coord < dimension:
+        offset = ((y_coord * dimension) + x_coord) * 2
+        terrain_id, elevation = struct.unpack('<bb', data[offset:offset+2])
+        tiles.append({'terrain_id': terrain_id, 'elevation': elevation, 'x': x_coord, 'y': y_coord})
+        x_coord += 1
+        if x_coord == dimension:
+            x_coord = 0
+            y_coord += 1
     return tiles

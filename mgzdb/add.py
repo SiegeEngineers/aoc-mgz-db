@@ -3,7 +3,6 @@
 import io
 import logging
 import os
-import sys
 import time
 from datetime import timedelta
 
@@ -13,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 
 import mgz.summary
 
-from mgzdb.platforms import PLATFORM_VOOBLY, VOOBLY_PLATFORMS
+from mgzdb.platforms import PLATFORM_VOOBLY
 from mgzdb.schema import (
     Match, SeriesMetadata, File, Player,
     Team, User, Series, Dataset, EventMap, Chat
@@ -29,7 +28,14 @@ LOGGER = logging.getLogger(__name__)
 LOG_ID_LENGTH = 8
 COMPRESSED_EXT = '.mgc'
 
+
 def has_transposition(user_data, players):
+    """Check for player data transposition.
+
+    Occasionally platforms will incorrectly record
+    match metadata, so we check it against the rec
+    to make sure it's accurate.
+    """
     if not user_data:
         return False
     from_rec = {}
@@ -41,9 +47,9 @@ def has_transposition(user_data, players):
     strike = 0
     for color_id, name in from_rec.items():
         if (
-            color_id not in from_user_data or
-            from_user_data[color_id].lower() not in name.lower() and
-            name.lower() not in from_user_data[color_id].lower()
+                color_id not in from_user_data or
+                from_user_data[color_id].lower() not in name.lower() and
+                name.lower() not in from_user_data[color_id].lower()
         ):
             strike += 1
     if strike >= len(players) / 2:
@@ -171,7 +177,7 @@ class AddFile:
                 played, build = parse_filename(original_filename)
             try:
                 match = self._add_match(
-                    summary, played, match_hash, user_data, rec_path, series_name,
+                    summary, played, match_hash, user_data, series_name,
                     series_id, platform_id, platform_match_id, ladder, build
                 )
                 if not match:
@@ -210,7 +216,7 @@ class AddFile:
         return True
 
     def _add_match( # pylint: disable=too-many-branches, too-many-return-statements
-            self, summary, played, match_hash, user_data, rec_path,
+            self, summary, played, match_hash, user_data,
             series_name=None, series_id=None, platform_id=None,
             platform_match_id=None, ladder=None, build=None
     ):

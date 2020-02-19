@@ -6,7 +6,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker, backref
-from sqlalchemy.schema import ForeignKeyConstraint, UniqueConstraint, Index
+from sqlalchemy.schema import ForeignKeyConstraint, UniqueConstraint
 
 from mgzdb.util import get_utc_now
 
@@ -157,6 +157,7 @@ class Map(BASE):
 
 
 class Technology(BASE):
+    """Technology."""
     __tablename__ = 'technologies'
     id = Column(Integer, primary_key=True)
     dataset_id = Column(Integer, ForeignKey('datasets.id'), primary_key=True)
@@ -165,14 +166,16 @@ class Technology(BASE):
 
 
 class Object(BASE):
+    """Object."""
     __tablename__ = 'objects'
     id = Column(Integer, primary_key=True)
-    dataset_id = Column(Integer, ForeignKey('datasets.id'),primary_key=True)
+    dataset_id = Column(Integer, ForeignKey('datasets.id'), primary_key=True)
     dataset = relationship('Dataset', foreign_keys=[dataset_id])
     name = Column(String)
 
 
 class Terrain(BASE):
+    """Terrain."""
     __tablename__ = 'terrain'
     id = Column(Integer, primary_key=True)
     dataset_id = Column(Integer, ForeignKey('datasets.id'), primary_key=True)
@@ -197,7 +200,7 @@ class StartingResources(BASE):
 
 
 class VictoryCondition(BASE):
-    """ictory conditions."""
+    """Victory conditions."""
     __tablename__ = 'victory_conditions'
     id = Column(Integer, primary_key=True)
     name = Column(String)
@@ -514,6 +517,7 @@ class Timeseries(BASE):
 
 
 class Research(BASE):
+    """Research."""
     __tablename__ = 'research'
     id = Column(Integer, primary_key=True)
     match_id = Column(Integer, ForeignKey('matches.id', ondelete='cascade'), index=True)
@@ -533,6 +537,7 @@ class Research(BASE):
 
 
 class ObjectInstance(BASE):
+    """Instance of object."""
     __tablename__ = 'object_instances'
     id = Column(Integer, primary_key=True)
     instance_id = Column(Integer, index=True)
@@ -557,6 +562,7 @@ class ObjectInstance(BASE):
 
 
 class ObjectInstanceState(BASE):
+    """Instance state."""
     __tablename__ = 'object_instance_states'
     id = Column(Integer, primary_key=True)
     timestamp = Column(Interval)
@@ -580,6 +586,7 @@ class ObjectInstanceState(BASE):
 
 
 class Market(BASE):
+    """Market coefficients."""
     __tablename__ = 'market'
     id = Column(Integer, primary_key=True)
     match_id = Column(Integer, ForeignKey('matches.id', ondelete='cascade'), index=True)
@@ -591,12 +598,14 @@ class Market(BASE):
 
 
 class Version(BASE):
+    """Version."""
     __tablename__ = 'versions'
     id = Column(Integer, primary_key=True)
     name = Column(String)
 
 
 class HiddenCupPlayers(BASE):
+    """HC player."""
     __tablename__ = 'hc'
     hc_name = Column(String, primary_key=True)
     person_name = Column(String, primary_key=True)

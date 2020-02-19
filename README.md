@@ -56,15 +56,6 @@ mgzdb add series "135406198-NAC2Q1 GrandFinal F1Re vs BacT.zip"
 
 When adding a series, the filename is used as the series name. Optionally prepend the name with a Challonge match ID.
 
-## Querying
-
-```bash
-mgzdb query file 1
-mgzdb query match 1
-mgzdb query series 1
-mgzdb query summary
-```
-
 ## Removing
 
 ```bash

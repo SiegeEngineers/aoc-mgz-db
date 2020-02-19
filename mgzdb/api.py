@@ -6,7 +6,6 @@ import tempfile
 import zipfile
 
 from mgzdb.add import AddFile
-from mgzdb.compress import decompress
 from mgzdb.schema import get_session, File, Match
 
 
@@ -23,7 +22,7 @@ class API: # pylint: disable=too-many-instance-attributes
         self.store_path = store_path
         self.platforms = platforms
         self.playback = playback
-        self.af = AddFile(self.session, self.platforms, self.store_path, playback)
+        self.adder = AddFile(self.session, self.platforms, self.store_path, playback)
         LOGGER.info("connected to database @ %s", db_path)
 
     def has_match(self, platform_id, match_id):
@@ -33,7 +32,7 @@ class API: # pylint: disable=too-many-instance-attributes
     def add_file(self, *args, **kwargs):
         """Add file via process pool."""
         LOGGER.info("processing file %s", args[0])
-        self.af.add_file(*args, **kwargs)
+        self.adder.add_file(*args, **kwargs)
 
     def add_match(self, platform, url, single_pov=True):
         """Add a match via platform url."""

@@ -1,6 +1,5 @@
 """CLI for MGZ database."""
 import argparse
-import json
 import logging
 import os
 
@@ -12,7 +11,6 @@ from mgzdb.util import parse_series_path
 
 CMD_ADD = 'add'
 CMD_REMOVE = 'remove'
-CMD_GET = 'get'
 SUBCMD_FILE = 'file'
 SUBCMD_MATCH = 'match'
 SUBCMD_SERIES = 'series'
@@ -54,17 +52,6 @@ def main(args): # pylint: disable=too-many-branches
     # Remove
     elif args.cmd == CMD_REMOVE:
         db_api.remove(file_id=args.file, match_id=args.match)
-
-    # Get
-    elif args.cmd == CMD_GET:
-        filename, data = db_api.get(args.file)
-        output_filename = args.output_path or filename
-        if os.path.exists(output_filename):
-            print('file already exists:', output_filename)
-            return
-        with open(output_filename, 'wb') as handle:
-            handle.write(data)
-        print(output_filename)
 
 
 def setup():
@@ -120,11 +107,6 @@ def setup():
     remove_group = remove.add_mutually_exclusive_group(required=True)
     remove_group.add_argument('-f', '--file')
     remove_group.add_argument('-m', '--match')
-
-    # "get" command
-    get = subparsers.add_parser(CMD_GET)
-    get.add_argument('file')
-    get.add_argument('-o', '--output-path')
 
     args = parser.parse_args()
     main(args)

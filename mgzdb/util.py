@@ -68,12 +68,12 @@ def parse_series_path(path):
 
 def parse_filename(filename):
     """Parse filename for useful data."""
-    mgz = parse_filename_mgz(filename)
-    de = parse_filename_de(filename)
-    if mgz[0]:
-        return mgz
-    elif de[0]:
-        return de
+    mgz_parts = parse_filename_mgz(filename)
+    de_parts = parse_filename_de(filename)
+    if mgz_parts[0]:
+        return mgz_parts
+    if de_parts[0]:
+        return de_parts
     return None, None
 
 
