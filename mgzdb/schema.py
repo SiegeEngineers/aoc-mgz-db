@@ -30,14 +30,6 @@ class Platform(BASE):
     match_url = Column(String)
 
 
-class CanonicalPlayer(BASE):
-    """Canonical player profile."""
-    __tablename__ = 'canonical_players'
-    user_id = Column(String, primary_key=True)
-    platform_id = Column(String, primary_key=True)
-    name = Column(String)
-
-
 class Person(BASE):
     """A known player."""
     __tablename__ = 'people'
@@ -443,7 +435,7 @@ class User(BASE):
     __tablename__ = 'users'
     id = Column(String, primary_key=True)
     platform_id = Column(String, ForeignKey('platforms.id'), primary_key=True)
-    person_id = Column(Integer, ForeignKey('people.id'))
+    person_id = Column(Integer, ForeignKey('people.id'), index=True)
     added = Column(DateTime, default=get_utc_now)
     __table_args__ = (
         UniqueConstraint('id', 'platform_id'),
