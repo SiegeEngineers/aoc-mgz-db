@@ -30,9 +30,9 @@ class API: # pylint: disable=too-many-instance-attributes
         return self.session.query(Match).filter_by(platform_id=platform_id, platform_match_id=match_id).one_or_none() is not None
 
     def add_file(self, *args, **kwargs):
-        """Add file via process pool."""
+        """Add file."""
         LOGGER.info("processing file %s", args[0])
-        self.adder.add_file(*args, **kwargs)
+        return self.adder.add_file(*args, **kwargs)
 
     def add_match(self, platform, url, single_pov=True):
         """Add a match via platform url."""

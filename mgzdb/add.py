@@ -84,9 +84,10 @@ def file_exists(session, file_hash, series_id):
     """
     exists = session.query(File).filter_by(hash=file_hash).one_or_none()
     if exists:
-        exists.match.series_id = series_id
-        session.commit()
-        return True
+        if not exists.match.series_id:
+            exists.match.series_id = series_id
+            session.commit()
+        return exists.match_id
     return False
 
 
@@ -122,7 +123,7 @@ class AddFile:
         start = time.time()
         if not os.path.isfile(rec_path):
             LOGGER.error("%s is not a file", rec_path)
-            return False
+            return False, 'Not a file'
 
         original_filename = os.path.basename(rec_path)
 
@@ -138,27 +139,28 @@ class AddFile:
             LOGGER.info("[f:%s] add started", log_id)
         except RuntimeError:
             LOGGER.error("[f] invalid mgz file")
-            return False
+            return False, 'Invalid mgz file'
         except LookupError:
             LOGGER.error("[f] unknown encoding")
-            return False
+            return False, 'Unknown text encoding'
         except ValueError as error:
             LOGGER.error("[f] error: %s", error)
-            return False
+            return False, error
 
-        if file_exists(self.session, file_hash, series_id):
-            LOGGER.warning("[f:%s] file already exists", log_id)
-            return False
+        existing_match_id = file_exists(self.session, file_hash, series_id)
+        if existing_match_id:
+            LOGGER.warning("[f:%s] file already exists (%d)", log_id, existing_match_id)
+            return None, existing_match_id
 
         try:
             encoding = summary.get_encoding()
         except ValueError as error:
             LOGGER.error("[f] error: %s", error)
-            return False
+            return False, error
         match_hash_obj = summary.get_hash()
         if not match_hash_obj:
             LOGGER.error("f:%s] not enough data to calculate safe match hash", log_id)
-            return False
+            return False, 'Not enough data to calculate safe match hash'
         match_hash = match_hash_obj.hexdigest()
         build = None
 
@@ -170,22 +172,22 @@ class AddFile:
             LOGGER.info("[f:%s] match already exists (%d); appending", log_id, match.id)
         except MultipleResultsFound:
             LOGGER.error("[f:%s] mismatched hash and match id: %s, %s", log_id, match_hash, platform_match_id)
-            return False
+            return False, 'Mismatched hash and match id'
         except NoResultFound:
             LOGGER.info("[f:%s] adding match", log_id)
             if not played:
                 played, build = parse_filename(original_filename)
             try:
-                match = self._add_match(
+                match, message = self._add_match(
                     summary, played, match_hash, user_data, series_name,
                     series_id, platform_id, platform_match_id, ladder, build
                 )
                 if not match:
-                    return False
+                    return False, message
                 self._update_match_users(platform_id, match.id, user_data)
             except IntegrityError:
                 LOGGER.error("[f:%s] constraint violation: could not add match", log_id)
-                return False
+                return False, 'Failed to add match'
 
         compressed_filename, compressed_size = self._handle_file(file_hash, data, Version(match.version_id))
 
@@ -209,11 +211,11 @@ class AddFile:
             self.session.commit()
         except RuntimeError:
             LOGGER.error("[f:%s] unable to add file, likely hash collision", log_id)
-            return False
+            return False, 'File hash collision'
 
         LOGGER.info("[f:%s] add finished in %.2f seconds, file id: %d, match id: %d",
                     log_id, time.time() - start, new_file.id, match.id)
-        return True
+        return file_hash, match.id
 
     def _add_match( # pylint: disable=too-many-branches, too-many-return-statements
             self, summary, played, match_hash, user_data,
@@ -226,7 +228,7 @@ class AddFile:
             duration = summary.get_duration()
         except RuntimeError:
             LOGGER.error("[m] failed to get duration")
-            return False
+            return False, 'Failed to get duration'
 
         log_id = match_hash[:LOG_ID_LENGTH]
         platform_data = summary.get_platform()
@@ -237,7 +239,7 @@ class AddFile:
             map_data = summary.get_map()
         except ValueError:
             LOGGER.error("[m:%s] has an invalid map", log_id)
-            return False
+            return False, 'Invalid map'
         completed = summary.get_completed()
         restored, _ = summary.get_restored()
         has_postgame = bool(postgame)
@@ -246,7 +248,7 @@ class AddFile:
             dataset_data = summary.get_dataset()
         except ValueError:
             LOGGER.error("[m:%s] dataset inconclusive", log_id)
-            return False
+            return False, 'Inconclusive dataset'
 
         teams = summary.get_teams()
         diplomacy = summary.get_diplomacy()
@@ -257,26 +259,26 @@ class AddFile:
 
         if restored:
             LOGGER.error("[m:%s] is restored game", log_id)
-            return False
+            return False, 'Restored matches not supported'
 
         if not completed:
             LOGGER.error("[m:%s] was not completed", log_id)
-            return False
+            return False, 'Incomplete matches not supported'
 
         if user_data and len(players) != len(user_data):
             LOGGER.error("[m:%s] has mismatched user data", log_id)
-            return False
+            return False, 'Mismatched user data'
 
         if has_transposition(user_data, players):
             LOGGER.error("[m:%s] has mismatched user data (transposition)", log_id)
-            return False
+            return False, 'Transposed user data'
 
         try:
             dataset = self.session.query(Dataset).filter_by(id=dataset_data['id']).one()
         except NoResultFound:
             LOGGER.error("[m:%s] dataset not supported: userpatch id: %s (%s)",
                          log_id, dataset_data['id'], dataset_data['name'])
-            return False
+            return False, 'Dataset not supported'
 
         series, tournament, event, event_map_id = self._handle_series(series_id, series_name, map_data, log_id)
         if series:
@@ -413,7 +415,7 @@ class AddFile:
                 )
             except RuntimeError:
                 LOGGER.warning("[m:%s] failed to insert players (probably bad civ id)", log_id)
-                return False
+                return False, 'Failed to load players'
 
             if match.platform_id == PLATFORM_VOOBLY and not user_data:
                 self._guess_match_user(player, data['name'])
@@ -422,7 +424,7 @@ class AddFile:
         if save_extraction(self.session, summary, ladder_id, match.id, dataset_data['id'], log_id):
             match.has_playback = True
         save_chat(self.session, summary.get_chat(), match.id)
-        return match
+        return match, None
 
     def _update_match_users(self, platform_id, match_id, user_data):
         """Update Voobly User info on Match."""
