@@ -1,4 +1,5 @@
 """Utilities."""
+import calendar
 import os
 import re
 from datetime import datetime
@@ -9,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 
 MGZ_EXT = '.mgz'
 DE_EXT = '.aoe2record'
+MGX_EXT = '.mgx'
 ZIP_EXT = '.zip'
 CHALLONGE_ID_LENGTH = 9
 COLLAPSE_WHITESPACE = re.compile(r'\W+')
@@ -69,9 +71,12 @@ def parse_series_path(path):
 def parse_filename(filename):
     """Parse filename for useful data."""
     mgz_parts = parse_filename_mgz(filename)
+    mgx_parts = parse_filename_mgx(filename)
     de_parts = parse_filename_de(filename)
     if mgz_parts[0]:
         return mgz_parts
+    if mgx_parts[0]:
+        return mgx_parts
     if de_parts[0]:
         return de_parts
     return None, None
@@ -88,7 +93,7 @@ def parse_filename_de(filename):
         hour=int(filename[39:41]),
         minute=int(filename[41:43]),
         second=int(filename[43:45])
-        ), filename[11:26]
+    ), filename[11:26]
 
 
 def parse_filename_mgz(filename):
@@ -103,6 +108,26 @@ def parse_filename_mgz(filename):
         minute=int(filename[15:17]),
         second=int(filename[17:19])
     ), None
+
+
+def parse_filename_mgx(filename):
+    """Parse a timestamped mgx filename.
+
+    Liberally validates filenames for the best chance to get a date.
+    """
+    mgx_pattern = re.compile(r'.+?(?P<day>[0-9]{2})-(?P<month>\w{3})-(?P<year>[0-9]{4}) (?P<hour>[0-9]{2})`(?P<minute>[0-9]{2})`(?P<second>[0-9]{2}).+?')
+    timestamp = mgx_pattern.match(filename)
+    if not timestamp or not filename.endswith(MGX_EXT):
+        return None, None
+    return datetime(
+        year=int(timestamp.group('year')),
+        month=list(calendar.month_abbr).index(timestamp.group('month')),
+        day=int(timestamp.group('day')),
+        hour=int(timestamp.group('hour')),
+        minute=int(timestamp.group('minute')),
+        second=int(timestamp.group('second'))
+    ), None
+
 
 
 def get_utc_now():

@@ -15,7 +15,8 @@ import mgz.summary
 from mgzdb.platforms import PLATFORM_VOOBLY
 from mgzdb.schema import (
     Match, SeriesMetadata, File, Player,
-    Team, User, Series, Dataset, EventMap, Chat
+    Team, User, Series, Dataset, EventMap, Chat,
+    Tournament, Round
 )
 from mgzdb.util import parse_filename, save_file, get_unique
 from mgzdb.compress import compress, compress_tiles
@@ -84,7 +85,10 @@ def file_exists(session, file_hash, series_id):
     """
     exists = session.query(File).filter_by(hash=file_hash).one_or_none()
     if exists:
-        if not exists.match.series_id:
+        if not exists.match.series_id and series_id:
+            data = session.query(Tournament.event_id, Tournament.id).join(Round).join(Series).filter(Series.id==series_id).one_or_none()
+            exists.match.event_id = data[0]
+            exists.match.tournament_id = data[1]
             exists.match.series_id = series_id
             session.commit()
         return exists.match_id
@@ -175,8 +179,9 @@ class AddFile:
             return False, 'Mismatched hash and match id'
         except NoResultFound:
             LOGGER.info("[f:%s] adding match", log_id)
+            parsed_played, build = parse_filename(original_filename)
             if not played:
-                played, build = parse_filename(original_filename)
+                played = parsed_played
             try:
                 match, message = self._add_match(
                     summary, played, match_hash, user_data, series_name,
@@ -381,6 +386,7 @@ class AddFile:
                     start_y=data['position'][1],
                     winner=data['winner'],
                     mvp=data['mvp'],
+                    cheater=data['cheater'],
                     score=data['score'],
                     rate_snapshot=data['rate_snapshot'],
                     military_score=data['achievements']['military']['score'],

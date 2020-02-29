@@ -390,6 +390,7 @@ class Player(BASE):
     human = Column(Boolean)
     winner = Column(Boolean)
     mvp = Column(Boolean)
+    cheater = Column(Boolean)
     score = Column(Integer)
     rate_before = Column(Float)
     rate_after = Column(Float, index=True)
