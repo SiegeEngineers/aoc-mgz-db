@@ -98,15 +98,17 @@ def parse_filename_de(filename):
 
 def parse_filename_mgz(filename):
     """Parse a Userpatch filename."""
-    if not filename.startswith('rec.') or not filename.endswith(MGZ_EXT) or len(filename) != 23:
+    mgz_pattern = re.compile(r'rec\.(?P<year>[0-9]{4})(?P<month>[0-9]{2})(?P<day>[0-9]{2})-(?P<hour>[0-9]{2})(?P<minute>[0-9]{2})(?P<second>[0-9]{2}).+?')
+    timestamp = mgz_pattern.match(filename)
+    if not timestamp or not filename.endswith(MGZ_EXT):
         return None, None
     return datetime(
-        year=int(filename[4:8]),
-        month=int(filename[8:10]),
-        day=int(filename[10:12]),
-        hour=int(filename[13:15]),
-        minute=int(filename[15:17]),
-        second=int(filename[17:19])
+        year=int(timestamp.group('year')),
+        month=int(timestamp.group('month')),
+        day=int(timestamp.group('day')),
+        hour=int(timestamp.group('hour')),
+        minute=int(timestamp.group('minute')),
+        second=int(timestamp.group('second'))
     ), None
 
 

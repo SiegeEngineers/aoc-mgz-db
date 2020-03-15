@@ -13,7 +13,7 @@ class TestUtil(unittest.TestCase):
         )
 
         self.assertEqual(
-            util.parse_filename('rec.20190615-112706.mgz'),
+            util.parse_filename('rec.20190615-112706-anything.mgz'),
             (datetime.datetime(2019, 6, 15, 11, 27, 6), None)
         )
 

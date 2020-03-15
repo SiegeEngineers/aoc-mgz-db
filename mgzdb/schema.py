@@ -249,6 +249,7 @@ class File(BASE):
     hash = Column(String, unique=True, nullable=False)
     filename = Column(String, nullable=False)
     original_filename = Column(String)
+    modified = Column(DateTime)
     encoding = Column(String)
     language = Column(String, index=True)
     size = Column(Integer, nullable=False)
@@ -337,6 +338,9 @@ class Match(BASE):
     starting_resources = relationship('StartingResources', foreign_keys=starting_resources_id)
     starting_age_id = Column(Integer, ForeignKey('starting_ages.id'), index=True)
     starting_age = relationship('StartingAge', foreign_keys=starting_age_id)
+    starting_town_centers = Column(Integer)
+    starting_palisades = Column(Boolean)
+    starting_walls = Column(Boolean)
     victory_condition_id = Column(Integer, ForeignKey('victory_conditions.id'), index=True)
     victory_condition = relationship('VictoryCondition', foreign_keys=victory_condition_id)
     treaty_length = Column(Integer)
@@ -349,6 +353,9 @@ class Match(BASE):
     research = relationship('Research', foreign_keys='Research.match_id', cascade='all, delete, delete-orphan')
     timeseries = relationship('Timeseries', foreign_keys='Timeseries.match_id', cascade='all, delete, delete-orphan')
     market = relationship('Market', foreign_keys='Market.match_id', cascade='all, delete, delete-orphan')
+    state_reader_version = Column(String)
+    state_reader_interval = Column(Integer)
+    state_reader_runtime = Column(Interval)
     hc = Column(Boolean)
     __table_args__ = (
         ForeignKeyConstraint(['ladder_id', 'platform_id'], ['ladders.id', 'ladders.platform_id']),
@@ -495,6 +502,8 @@ class Timeseries(BASE):
     wood = Column(Integer)
     stone = Column(Integer)
     gold = Column(Integer)
+    total_housed_time = Column(Interval)
+    total_popcapped_time = Column(Interval)
     relics_captured = Column(Integer)
     relic_gold = Column(Integer)
     trade_profit = Column(Integer)
@@ -504,6 +513,16 @@ class Timeseries(BASE):
     total_wood = Column(Integer)
     total_stone = Column(Integer)
     total_gold = Column(Integer)
+    value_spent_objects = Column(Integer)
+    value_spent_research = Column(Integer)
+    value_lost_units = Column(Integer)
+    value_lost_buildings = Column(Integer)
+    value_current_units = Column(Integer)
+    value_current_buildings = Column(Integer)
+    value_objects_destroyed = Column(Integer)
+    kills = Column(Integer)
+    razes = Column(Integer)
+    deaths = Column(Integer)
     __table_args__ = (
         ForeignKeyConstraint(['match_id', 'player_number'], ['players.match_id', 'players.number'], ondelete='cascade'),
     )
@@ -537,6 +556,9 @@ class ObjectInstance(BASE):
     match_id = Column(Integer, ForeignKey('matches.id', ondelete='cascade'), index=True)
     dataset_id = Column(Integer, ForeignKey('datasets.id'), index=True)
     dataset = relationship('Dataset', foreign_keys=dataset_id)
+    initial_player_number = Column(Integer, index=True)
+    initial_object_id = Column(Integer, index=True)
+    initial_class_id = Column(Integer, index=True)
     states = relationship('ObjectInstanceState', foreign_keys='ObjectInstanceState.match_id', cascade='all, delete, delete-orphan')
     created = Column(Interval)
     destroyed = Column(Interval)
@@ -549,6 +571,7 @@ class ObjectInstance(BASE):
     destroyed_building_percent = Column(Float)
     building_started = Column(Interval)
     building_completed = Column(Interval)
+    total_idle_time = Column(Interval)
     __table_args__ = (
         UniqueConstraint('match_id', 'instance_id'),
     )
@@ -588,6 +611,59 @@ class Market(BASE):
     wood = Column(Float)
     stone = Column(Float)
     food = Column(Float)
+
+
+class ActionLog(BASE):
+    """Action log."""
+    __tablename__ = 'action_log'
+    id = Column(Integer, primary_key=True)
+    timestamp = Column(Interval, index=True)
+    match_id = Column(Integer, ForeignKey('matches.id', ondelete='cascade'), index=True)
+    match = relationship('Match', foreign_keys=[match_id])
+    player_number = Column(Integer, index=True)
+    action_id = Column(Integer, ForeignKey('actions.id'), index=True)
+    action = relationship('Action', foreign_keys=[action_id], viewonly=True)
+    action_x = Column(Float)
+    action_y = Column(Float)
+
+
+class Action(BASE):
+    """Actions."""
+    __tablename__ = 'actions'
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+
+
+class Tribute(BASE):
+    """Tribute."""
+    __tablename__ = 'tribute'
+    id = Column(Integer, primary_key=True)
+    timestamp = Column(Interval)
+    match_id = Column(Integer, ForeignKey('matches.id', ondelete='cascade'), index=True)
+    player_number = Column(Integer, index=True)
+    target_player_number = Column(Integer)
+    resource_id = Column(Integer, ForeignKey('resources.id'))
+    amount = Column(Float)
+    fee = Column(Float)
+
+
+class Transaction(BASE):
+    """Market commodity transactions."""
+    __tablename__ = 'transactions'
+    id = Column(Integer, primary_key=True)
+    timestamp = Column(Interval)
+    match_id = Column(Integer, ForeignKey('matches.id', ondelete='cascade'), index=True)
+    player_number = Column(Integer, index=True)
+    action_id = Column(Integer, ForeignKey('actions.id'))
+    resource_id = Column(Integer, ForeignKey('resources.id'))
+    amount = Column(Integer)
+
+
+class Resource(BASE):
+    """Resource."""
+    __tablename__ = 'resources'
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
 
 
 class Version(BASE):

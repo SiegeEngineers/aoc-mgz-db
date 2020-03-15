@@ -4,7 +4,7 @@ import io
 import logging
 import os
 import time
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 import pkg_resources
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
@@ -130,6 +130,7 @@ class AddFile:
             return False, 'Not a file'
 
         original_filename = os.path.basename(rec_path)
+        modified = datetime.fromtimestamp(os.path.getmtime(rec_path))
 
         with open(rec_path, 'rb') as handle:
             data = handle.read()
@@ -141,8 +142,8 @@ class AddFile:
             file_hash = summary.get_file_hash()
             log_id = file_hash[:LOG_ID_LENGTH]
             LOGGER.info("[f:%s] add started", log_id)
-        except RuntimeError:
-            LOGGER.error("[f] invalid mgz file")
+        except RuntimeError as e:
+            LOGGER.error("[f] invalid mgz file: {}".format(e))
             return False, 'Invalid mgz file'
         except LookupError:
             LOGGER.error("[f] unknown encoding")
@@ -204,6 +205,7 @@ class AddFile:
                 original_filename=original_filename,
                 hash=file_hash,
                 size=summary.size,
+                modified=modified,
                 compressed_size=compressed_size,
                 encoding=encoding,
                 language=summary.get_language(),
@@ -427,8 +429,12 @@ class AddFile:
                 self._guess_match_user(player, data['name'])
 
         match.winning_team_id = winning_team_id
-        if save_extraction(self.session, summary, ladder_id, match.id, dataset_data['id'], log_id):
+        success, attrs = save_extraction(self.session, summary, ladder_id, match.id, dataset_data['id'], log_id)
+        if success:
             match.has_playback = True
+            match.state_reader_version = attrs['version']
+            match.state_reader_interval = attrs['interval']
+            match.state_reader_runtime = attrs['runtime']
         save_chat(self.session, summary.get_chat(), match.id)
         return match, None
 
