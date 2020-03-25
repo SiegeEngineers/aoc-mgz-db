@@ -1,6 +1,5 @@
 """CLI for MGZ database."""
 import argparse
-import datetime
 import logging
 import os
 
@@ -15,7 +14,6 @@ CMD_REMOVE = 'remove'
 SUBCMD_FILE = 'file'
 SUBCMD_MATCH = 'match'
 SUBCMD_SERIES = 'series'
-SUBCMD_ZIP = 'zip'
 DEFAULT_DB = 'sqlite:///data.db'
 
 
@@ -36,8 +34,7 @@ def main(args): # pylint: disable=too-many-branches
         # File
         if args.subcmd == SUBCMD_FILE:
             for rec in args.rec_path:
-                played = datetime.datetime.fromtimestamp(os.path.getmtime(rec))
-                db_api.add_file(rec, args.source, None, played=played)
+                db_api.add_file(rec, args.source, None)
 
         # Match
         elif args.subcmd == SUBCMD_MATCH:
@@ -51,11 +48,6 @@ def main(args): # pylint: disable=too-many-branches
                 db_api.add_series(
                     path, series, series_id
                 )
-
-        # Zip
-        elif args.subcmd == SUBCMD_ZIP:
-            for path in args.zip_path:
-                db_api.add_zip(args.platform, path)
 
     # Remove
     elif args.cmd == CMD_REMOVE:
@@ -109,11 +101,6 @@ def setup():
     # "add series"
     add_series = add_subparsers.add_parser(SUBCMD_SERIES)
     add_series.add_argument('zip_path', nargs='+')
-
-    # "add zip"
-    add_zip = add_subparsers.add_parser(SUBCMD_ZIP)
-    add_zip.add_argument('platform')
-    add_zip.add_argument('zip_path', nargs='+')
 
     # "remove" command
     remove = subparsers.add_parser(CMD_REMOVE)

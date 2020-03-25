@@ -20,7 +20,7 @@ from mgzdb.schema import (
 )
 from mgzdb.util import parse_filename, save_file, get_unique
 from mgzdb.compress import compress, compress_tiles
-from mgzdb.extract import save_extraction
+from mgzdb.extract import save_starting_state, save_extraction
 from mgz.util import Version
 from mgz.summary.chat import Chat as ChatType
 
@@ -86,7 +86,7 @@ def file_exists(session, file_hash, series_id):
     exists = session.query(File).filter_by(hash=file_hash).one_or_none()
     if exists:
         if not exists.match.series_id and series_id:
-            data = session.query(Tournament.event_id, Tournament.id).join(Round).join(Series).filter(Series.id==series_id).one_or_none()
+            data = session.query(Tournament.event_id, Tournament.id).join(Round).join(Series).filter(Series.id == series_id).one_or_none()
             exists.match.event_id = data[0]
             exists.match.tournament_id = data[1]
             exists.match.series_id = series_id
@@ -121,7 +121,7 @@ class AddFile:
     def add_file( # pylint: disable=too-many-return-statements, too-many-branches
             self, rec_path, reference, series_name=None,
             series_id=None, platform_id=None, platform_match_id=None,
-            played=None, ladder=None, user_data=None
+            platform_metadata=None, played=None, ladder=None, user_data=None
     ):
         """Add a single mgz file."""
         start = time.time()
@@ -142,8 +142,8 @@ class AddFile:
             file_hash = summary.get_file_hash()
             log_id = file_hash[:LOG_ID_LENGTH]
             LOGGER.info("[f:%s] add started", log_id)
-        except RuntimeError as e:
-            LOGGER.error("[f] invalid mgz file: {}".format(e))
+        except RuntimeError as error:
+            LOGGER.error("[f] invalid mgz file: %s", str(error))
             return False, 'Invalid mgz file'
         except LookupError:
             LOGGER.error("[f] unknown encoding")
@@ -186,7 +186,8 @@ class AddFile:
             try:
                 match, message = self._add_match(
                     summary, played, match_hash, user_data, series_name,
-                    series_id, platform_id, platform_match_id, ladder, build
+                    series_id, platform_id, platform_match_id,
+                    platform_metadata, ladder, build
                 )
                 if not match:
                     return False, message
@@ -227,7 +228,7 @@ class AddFile:
     def _add_match( # pylint: disable=too-many-branches, too-many-return-statements
             self, summary, played, match_hash, user_data,
             series_name=None, series_id=None, platform_id=None,
-            platform_match_id=None, ladder=None, build=None
+            platform_match_id=None, platform_metadata=None, ladder=None, build=None
     ):
         """Add a match."""
         try:
@@ -291,12 +292,14 @@ class AddFile:
         if series:
             played = series.played
 
+        objects = summary.get_objects()
 
         match = get_unique(
             self.session,
             Match, ['hash', 'platform_match_id'],
             platform_match_id=platform_match_id,
             platform_id=platform_id,
+            platform_metadata=platform_metadata,
             played=played,
             hash=match_hash,
             series=series,
@@ -323,6 +326,7 @@ class AddFile:
             direct_placement=map_data['modes']['direct_placement'],
             effect_quantity=map_data['modes']['effect_quantity'],
             fixed_positions=map_data['modes']['fixed_positions'],
+            water_percent=map_data['water'],
             duration=timedelta(milliseconds=duration),
             completed=completed,
             restored=restored,
@@ -344,7 +348,10 @@ class AddFile:
             multiqueue=settings['multiqueue'],
             diplomacy_type=diplomacy['type'],
             team_size=diplomacy.get('team_size'),
-            mirror=mirror
+            mirror=mirror,
+            starting_town_centers=objects.get('tcs'),
+            starting_walls=objects.get('stone_walls'),
+            starting_palisades=objects.get('palisade_walls')
         )
 
         winning_team_id = None
@@ -422,11 +429,12 @@ class AddFile:
                     villager_high=data['achievements']['society']['villager_high']
                 )
             except RuntimeError:
-                LOGGER.warning("[m:%s] failed to insert players (probably bad civ id)", log_id)
+                LOGGER.warning("[m:%s] failed to insert players (probably bad civ id: %d)", log_id, data['civilization'])
                 return False, 'Failed to load players'
 
             if match.platform_id == PLATFORM_VOOBLY and not user_data:
                 self._guess_match_user(player, data['name'])
+
 
         match.winning_team_id = winning_team_id
         success, attrs = save_extraction(self.session, summary, ladder_id, match.id, dataset_data['id'], log_id)
@@ -435,6 +443,9 @@ class AddFile:
             match.state_reader_version = attrs['version']
             match.state_reader_interval = attrs['interval']
             match.state_reader_runtime = attrs['runtime']
+        else:
+            save_starting_state(self.session, objects['objects'], match.id, dataset_data['id'])
+
         save_chat(self.session, summary.get_chat(), match.id)
         return match, None
 

@@ -21,3 +21,8 @@ class TestUtil(unittest.TestCase):
             util.parse_filename('recorded game -  29-Mar-2001 00`35`51 3v3 iketh vs woogy.mgx'),
             (datetime.datetime(2001, 3, 29, 0, 35, 51), None)
         )
+
+        self.assertEqual(
+            util.parse_filename('partida-grabada-21-sep-2010-22-19-44.mgx'),
+            (datetime.datetime(2010, 9, 21, 22, 19, 44), None)
+        )

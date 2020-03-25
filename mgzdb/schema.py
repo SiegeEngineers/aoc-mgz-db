@@ -238,6 +238,7 @@ class PlayerColor(BASE):
     __tablename__ = 'player_colors'
     id = Column(Integer, primary_key=True)
     name = Column(String)
+    hex = Column(String)
 
 
 class File(BASE):
@@ -294,6 +295,7 @@ class Match(BASE):
     dataset = relationship('Dataset', foreign_keys=dataset_id)
     platform_id = Column(String, ForeignKey('platforms.id'), index=True)
     platform = relationship('Platform', foreign_keys=platform_id)
+    platform_metadata = Column(String)
     ladder_id = Column(Integer)
     ladder = relationship('Ladder', foreign_keys=[ladder_id, platform_id], viewonly=True)
     rated = Column(Boolean)
@@ -313,6 +315,7 @@ class Match(BASE):
     fixed_positions = Column(Boolean)
     direct_placement = Column(Boolean)
     effect_quantity = Column(Boolean)
+    water_percent = Column(Float)
     played = Column(DateTime, index=True)
     added = Column(DateTime, default=get_utc_now)
     platform_match_id = Column(String, unique=True)
@@ -657,6 +660,23 @@ class Transaction(BASE):
     action_id = Column(Integer, ForeignKey('actions.id'))
     resource_id = Column(Integer, ForeignKey('resources.id'))
     amount = Column(Integer)
+
+
+class Formation(BASE):
+    """Formation usage."""
+    __tablename__ = 'formations'
+    id = Column(Integer, primary_key=True)
+    timestamp = Column(Interval)
+    match_id = Column(Integer, ForeignKey('matches.id', ondelete='cascade'), index=True)
+    player_number = Column(Integer, index=True)
+    formation_id = Column(Integer, ForeignKey('formation_types.id'))
+
+
+class FormationType(BASE):
+    """Formation types."""
+    __tablename__ = 'formation_types'
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
 
 
 class Resource(BASE):
