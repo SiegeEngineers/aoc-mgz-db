@@ -117,18 +117,26 @@ def parse_filename_mgx(filename):
 
     Liberally validates filenames for the best chance to get a date.
     """
-    mgx_pattern = re.compile(r'.+?(?P<day>[0-9]{2})-(?P<month>\w{3})-(?P<year>[0-9]{4}) (?P<hour>[0-9]{2})`(?P<minute>[0-9]{2})`(?P<second>[0-9]{2}).+?')
-    timestamp = mgx_pattern.match(filename)
-    if not timestamp or not filename.endswith(MGX_EXT):
+    if not filename.endswith(MGX_EXT):
         return None, None
-    return datetime(
-        year=int(timestamp.group('year')),
-        month=list(calendar.month_abbr).index(timestamp.group('month')),
-        day=int(timestamp.group('day')),
-        hour=int(timestamp.group('hour')),
-        minute=int(timestamp.group('minute')),
-        second=int(timestamp.group('second'))
-    ), None
+    mgx_pattern_up = re.compile(r'.+?(?P<day>[0-9]{2})-(?P<month>\w{3})-(?P<year>[0-9]{4}) (?P<hour>[0-9]{2})`(?P<minute>[0-9]{2})`(?P<second>[0-9]{2}).+?')
+    timestamp = mgx_pattern_up.match(filename)
+    if not timestamp:
+        mgx_pattern = re.compile(r'.+?(?P<day>[0-9]{2})-(?P<month>\w{3})-(?P<year>[0-9]{4})-(?P<hour>[0-9]{2})-(?P<minute>[0-9]{2})-(?P<second>[0-9]{2}).+?')
+        timestamp = mgx_pattern.match(filename)
+        if not timestamp:
+            return None, None
+    try:
+        return datetime(
+            year=int(timestamp.group('year')),
+            month=list(calendar.month_abbr).index(timestamp.group('month').capitalize()),
+            day=int(timestamp.group('day')),
+            hour=int(timestamp.group('hour')),
+            minute=int(timestamp.group('minute')),
+            second=int(timestamp.group('second'))
+        ), None
+    except ValueError:
+        return None, None
 
 
 

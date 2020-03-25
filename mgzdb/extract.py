@@ -9,10 +9,11 @@ from mgzdb.schema import (
 
 
 LOGGER = logging.getLogger(__name__)
-ALLOWED = False
-ALLOWED_LADDERS = [131, 132]
-ALLOWED_RATE = 0
+ALLOWED = True
+ALLOWED_LADDERS = [131] #, 132]
+ALLOWED_RATE = 1900
 SUPPORTED_DATASETS = [1]
+STARTING_SUPPORTED_DATASETS = [0, 1]
 SAMPLE_INTERVAL = 30000
 
 
@@ -26,6 +27,28 @@ def allow_extraction(players, ladder_id, dataset_id):
         dataset_id in SUPPORTED_DATASETS and
         rate_avg >= ALLOWED_RATE
     )
+
+
+def save_starting_state(session, objects, match_id, dataset_id):
+    """Save starting state."""
+    if dataset_id not in STARTING_SUPPORTED_DATASETS:
+        return False
+    objs = []
+    for record in objects:
+        objs.append(ObjectInstance(
+            match_id=match_id,
+            dataset_id=dataset_id,
+            instance_id=record['instance_id'],
+            initial_object_id=record['object_id'],
+            initial_class_id=record['class_id'],
+            initial_player_number=record['player_number'],
+            created=timedelta(milliseconds=0),
+            created_x=record['x'],
+            created_y=record['y']
+        ))
+    session.bulk_save_objects(objs)
+    session.commit()
+    return True
 
 
 def save_extraction(session, summary, ladder_id, match_id, dataset_id, log_id, force=False):
