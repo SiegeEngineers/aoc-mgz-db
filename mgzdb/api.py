@@ -5,6 +5,7 @@ import logging
 import os
 import tempfile
 import zipfile
+import rarfile
 from datetime import datetime
 
 from mgzdb.add import AddFile
@@ -98,6 +99,44 @@ class API: # pylint: disable=too-many-instance-attributes
                     series_id
                 )
             LOGGER.info("[%s] finished", os.path.basename(zip_path))
+
+
+    def add_zip(self, platform_id, zip_path):
+        """Add matches via zip file."""
+        try:
+            if zip_path.endswith('zip'):
+                cf = zipfile.ZipFile(zip_path)
+            elif zip_path.endswith('rar'):
+                cf = rarfile.RarFile(zip_path)
+            else:
+                LOGGER.error("[%s] not a valid archive", os.path.basename(zip_path))
+                return
+        except zipfile.BadZipFile:
+            LOGGER.error("[%s] bad zip file", os.path.basename(zip_path))
+            return
+        with cf as series_zip:
+            LOGGER.info("[%s] opened archive", os.path.basename(zip_path))
+            for zi in series_zip.infolist():
+                series_zip.extract(zi, path=self.temp_dir.name)
+                date_time = time.mktime(zi.date_time + (0, 0, -1))
+                os.utime(os.path.join(self.temp_dir.name, zi.filename), (date_time, date_time))
+            for filename in sorted(series_zip.namelist()):
+                if filename.endswith('/'):
+                    continue
+                if not (filename.endswith('.mgz') or filename.endswith('.mgx')):
+                    continue
+                LOGGER.info("[%s] processing member %s", os.path.basename(zip_path), filename)
+                played, _ = parse_filename(os.path.basename(filename))
+                if not played:
+                    played = datetime.fromtimestamp(os.path.getmtime(os.path.join(self.temp_dir.name, filename)))
+                self.add_file(
+                    os.path.join(self.temp_dir.name, filename),
+                    os.path.basename(zip_path),
+                    platform_id=platform_id,
+                    played=played
+                )
+            LOGGER.info("[%s] finished", os.path.basename(zip_path))
+
 
     def remove(self, file_id=None, match_id=None):
         """Remove a file, match, or series.
