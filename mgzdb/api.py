@@ -104,12 +104,9 @@ class API: # pylint: disable=too-many-instance-attributes
         """
         if file_id:
             obj = self.session.query(File).get(file_id)
-            if obj:
-                if len(obj.match.files) == 1:
-                    obj = obj.match.files[0].match
-                self.session.delete(obj)
-                self.session.commit()
-                return
+            self.session.delete(obj)
+            self.session.commit()
+            return
         elif match_id:
             obj = self.session.query(Match).get(match_id)
             if obj:
