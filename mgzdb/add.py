@@ -468,7 +468,8 @@ class AddFile:
         match.lobby_opened = datetime.fromtimestamp(data['opened'])
         match.server = data['server']
         match.ladder_id = data['leaderboard_id']
-        match.build = '101.101.{}.0'.format(data['version'])
+        if data['version']:
+            match.build = '101.101.{}.0'.format(data['version'])
         for p in data['players']:
             try:
                 player = self.session.query(Player).filter_by(match_id=match.id, user_id=str(p['profile_id'])).one()
