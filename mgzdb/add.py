@@ -437,7 +437,7 @@ class AddFile:
                 LOGGER.warning("[m:%s] failed to insert players (probably bad civ id: %d)", log_id, data['civilization'])
                 return False, 'Failed to load players'
 
-            if match.platform_id == PLATFORM_VOOBLY and not user_data:
+            if match.platform_id == PLATFORM_VOOBLY and not user_data and player.human:
                 self._guess_match_user(player, data['name'])
 
 
@@ -471,6 +471,8 @@ class AddFile:
         if data['version']:
             match.build = '101.101.{}.0'.format(data['version'])
         for p in data['players']:
+            if not p['profile_id']:
+                continue
             try:
                 player = self.session.query(Player).filter_by(match_id=match.id, user_id=str(p['profile_id'])).one()
             except NoResultFound:
@@ -491,6 +493,8 @@ class AddFile:
             except NoResultFound:
                 LOGGER.error("failed to find p%d to update platform user data",
                              user['color_id'] + 1)
+                continue
+            if not player.human:
                 continue
             LOGGER.info("[m:%s] updating platform user data for p%d",
                         player.match.hash[:LOG_ID_LENGTH], user['color_id'] + 1)
