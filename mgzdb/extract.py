@@ -2,18 +2,21 @@
 import logging
 from datetime import timedelta
 
+from mgz import fast
 from mgzdb.schema import (
     Timeseries, Research, ObjectInstance, Market,
-    ObjectInstanceState, ActionLog, Tribute, Transaction
+    ObjectInstanceState, ActionLog, Tribute, Transaction,
+    Formation
 )
 
 
 LOGGER = logging.getLogger(__name__)
-ALLOWED = True
+ALLOWED = False
 ALLOWED_LADDERS = [131] #, 132]
 ALLOWED_RATE = 1900
 SUPPORTED_DATASETS = [1]
 STARTING_SUPPORTED_DATASETS = [0, 1]
+STARTING_SUPPORTED_DATASETS = [0, 1, 100]
 SAMPLE_INTERVAL = 30000
 
 
@@ -85,27 +88,27 @@ def save_extraction(session, summary, ladder_id, match_id, dataset_id, log_id, f
     for record in extracted['state']:
         record['timestamp'] = timedelta(milliseconds=record['timestamp'])
         objs.append(ObjectInstanceState(match_id=match_id, dataset_id=dataset_id, **record))
-    for (timestamp, payload) in extracted['tribute']:
-        objs.append(Tribute(
-            match_id=match_id,
-            timestamp=timedelta(milliseconds=timestamp),
-            player_number=payload['player_id'],
-            target_player_number=payload['player_id_to'],
-            resource_id=payload['resource_id'],
-            amount=payload['amount'],
-            fee=payload['fee']
-        ))
-    for (timestamp, action_type, payload) in extracted['transactions']:
-        objs.append(Transaction(
-            match_id=match_id,
-            timestamp=timedelta(milliseconds=timestamp),
-            action_id=action_type.value,
-            player_number=payload['player_id'],
-            resource_id=payload['resource_id'],
-            amount=payload['amount']
-        ))
-    if summary.get_diplomacy().get('type') == '1v1':
-        for (timestamp, action_type, payload) in extracted['actions']:
+    for (timestamp, action_type, payload) in extracted['actions']:
+        if action_type == fast.Action.TRIBUTE:
+            objs.append(Tribute(
+                match_id=match_id,
+                timestamp=timedelta(milliseconds=timestamp),
+                player_number=payload['player_id'],
+                target_player_number=payload['player_id_to'],
+                resource_id=payload['resource_id'],
+                amount=payload['amount'],
+                fee=payload['fee']
+            ))
+        if action_type in [fast.Action.BUY, fast.Action.SELL]:
+            objs.append(Transaction(
+                match_id=match_id,
+                timestamp=timedelta(milliseconds=timestamp),
+                action_id=action_type.value,
+                player_number=payload['player_id'],
+                resource_id=payload['resource_id'],
+                amount=payload['amount']
+            ))
+        if summary.get_diplomacy().get('type') == '1v1':
             objs.append(ActionLog(
                 match_id=match_id,
                 timestamp=timedelta(milliseconds=timestamp),
@@ -114,6 +117,13 @@ def save_extraction(session, summary, ladder_id, match_id, dataset_id, log_id, f
                 action_x=payload.get('x'),
                 action_y=payload.get('y')
             ))
+            if action_type == fast.Action.FORMATION:
+                objs.append(Formation(
+                    match_id=match_id,
+                    timestamp=timedelta(milliseconds=timestamp),
+                    formation_id=payload.get('formation_id'),
+                    player_number=payload.get('player_id')
+                ))
 
     session.bulk_save_objects(objs)
     session.commit()

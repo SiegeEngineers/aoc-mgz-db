@@ -7,6 +7,7 @@ import time
 from datetime import timedelta, datetime
 
 import pkg_resources
+import requests
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 from sqlalchemy.exc import IntegrityError
 
@@ -86,7 +87,7 @@ def file_exists(session, file_hash, series_id):
     exists = session.query(File).filter_by(hash=file_hash).one_or_none()
     if exists:
         if not exists.match.series_id and series_id:
-            data = session.query(Tournament.event_id, Tournament.id).join(Round).join(Series).filter(Series.id==series_id).one_or_none()
+            data = session.query(Tournament.event_id, Tournament.id).join(Round).join(Series).filter(Series.id == series_id).one_or_none()
             exists.match.event_id = data[0]
             exists.match.tournament_id = data[1]
             exists.match.series_id = series_id
@@ -142,8 +143,8 @@ class AddFile:
             file_hash = summary.get_file_hash()
             log_id = file_hash[:LOG_ID_LENGTH]
             LOGGER.info("[f:%s] add started", log_id)
-        except RuntimeError as e:
-            LOGGER.error("[f] invalid mgz file: {}".format(e))
+        except RuntimeError as error:
+            LOGGER.error("[f] invalid mgz file: %s", str(error))
             return False, 'Invalid mgz file'
         except LookupError:
             LOGGER.error("[f] unknown encoding")
@@ -155,6 +156,7 @@ class AddFile:
         existing_match_id = file_exists(self.session, file_hash, series_id)
         if existing_match_id:
             LOGGER.warning("[f:%s] file already exists (%d)", log_id, existing_match_id)
+            self._handle_file(file_hash, data, Version(summary.get_version()[0]))
             return None, existing_match_id
 
         try:
@@ -170,6 +172,8 @@ class AddFile:
         build = None
 
         try:
+            if not platform_match_id and summary.get_platform()['platform_match_id']:
+                platform_match_id = summary.get_platform()['platform_match_id']
             where = (Match.hash == match_hash)
             if platform_match_id:
                 where |= (Match.platform_match_id == platform_match_id)
@@ -192,6 +196,7 @@ class AddFile:
                 if not match:
                     return False, message
                 self._update_match_users(platform_id, match.id, user_data)
+                self._update_match_de(match)
             except IntegrityError:
                 LOGGER.error("[f:%s] constraint violation: could not add match", log_id)
                 return False, 'Failed to add match'
@@ -326,6 +331,7 @@ class AddFile:
             direct_placement=map_data['modes']['direct_placement'],
             effect_quantity=map_data['modes']['effect_quantity'],
             fixed_positions=map_data['modes']['fixed_positions'],
+            water_percent=map_data['water'],
             duration=timedelta(milliseconds=duration),
             completed=completed,
             restored=restored,
@@ -431,7 +437,7 @@ class AddFile:
                 LOGGER.warning("[m:%s] failed to insert players (probably bad civ id: %d)", log_id, data['civilization'])
                 return False, 'Failed to load players'
 
-            if match.platform_id == PLATFORM_VOOBLY and not user_data:
+            if match.platform_id == PLATFORM_VOOBLY and not user_data and player.human:
                 self._guess_match_user(player, data['name'])
 
 
@@ -448,6 +454,35 @@ class AddFile:
         save_chat(self.session, summary.get_chat(), match.id)
         return match, None
 
+    def _update_match_de(self, match):
+        if match.platform_id != 'de':
+            return
+        resp = requests.get('https://aoe2.net/api/match?uuid={}'.format(match.platform_match_id))
+        if resp.status_code != 200:
+            LOGGER.warning('failed to get aoe2.net data')
+            return
+        data = resp.json()
+        match.played = datetime.fromtimestamp(data['started'])
+        match.rated = data['ranked']
+        match.lobby_private = data['has_password']
+        match.lobby_opened = datetime.fromtimestamp(data['opened'])
+        match.server = data['server']
+        match.ladder_id = data['leaderboard_id']
+        if data['version']:
+            match.build = '101.101.{}.0'.format(data['version'])
+        for p in data['players']:
+            if not p['profile_id']:
+                continue
+            try:
+                player = self.session.query(Player).filter_by(match_id=match.id, user_id=str(p['profile_id'])).one()
+            except NoResultFound:
+                LOGGER.error("failed to find p%d to update platform user data", p['color'])
+                continue
+            LOGGER.info("[m:%s] updating platform user data for p%d", match.hash[:LOG_ID_LENGTH], p['color'])
+            get_unique(self.session, User, ['id', 'platform_id'], id=str(p['profile_id']), platform_id=match.platform_id)
+            player.rate_snapshot = p['rating']
+
+
     def _update_match_users(self, platform_id, match_id, user_data):
         """Update Voobly User info on Match."""
         if not user_data:
@@ -458,6 +493,8 @@ class AddFile:
             except NoResultFound:
                 LOGGER.error("failed to find p%d to update platform user data",
                              user['color_id'] + 1)
+                continue
+            if not player.human:
                 continue
             LOGGER.info("[m:%s] updating platform user data for p%d",
                         player.match.hash[:LOG_ID_LENGTH], user['color_id'] + 1)

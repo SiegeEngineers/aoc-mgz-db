@@ -10,7 +10,6 @@ from datetime import datetime
 
 from mgzdb.add import AddFile
 from mgzdb.schema import get_session, File, Match
-from mgzdb.util import parse_filename
 
 LOGGER = logging.getLogger(__name__)
 
@@ -84,10 +83,10 @@ class API: # pylint: disable=too-many-instance-attributes
         """Add a series via zip file."""
         with zipfile.ZipFile(zip_path) as series_zip:
             LOGGER.info("[%s] opened archive", os.path.basename(zip_path))
-            for zi in series_zip.infolist():
-                series_zip.extract(zi, path=self.temp_dir.name)
-                date_time = time.mktime(zi.date_time + (0, 0, -1))
-                os.utime(os.path.join(self.temp_dir.name, zi.filename), (date_time, date_time))
+            for zip_member in series_zip.infolist():
+                series_zip.extract(zip_member, path=self.temp_dir.name)
+                date_time = time.mktime(zip_member.date_time + (0, 0, -1))
+                os.utime(os.path.join(self.temp_dir.name, zip_member.filename), (date_time, date_time))
             for filename in sorted(series_zip.namelist()):
                 if filename.endswith('/'):
                     continue
@@ -99,7 +98,6 @@ class API: # pylint: disable=too-many-instance-attributes
                     series_id
                 )
             LOGGER.info("[%s] finished", os.path.basename(zip_path))
-
 
     def add_zip(self, platform_id, zip_path):
         """Add matches via zip file."""
@@ -137,7 +135,6 @@ class API: # pylint: disable=too-many-instance-attributes
                 )
             LOGGER.info("[%s] finished", os.path.basename(zip_path))
 
-
     def remove(self, file_id=None, match_id=None):
         """Remove a file, match, or series.
 
@@ -145,12 +142,9 @@ class API: # pylint: disable=too-many-instance-attributes
         """
         if file_id:
             obj = self.session.query(File).get(file_id)
-            if obj:
-                if len(obj.match.files) == 1:
-                    obj = obj.match.files[0].match
-                self.session.delete(obj)
-                self.session.commit()
-                return
+            self.session.delete(obj)
+            self.session.commit()
+            return
         elif match_id:
             obj = self.session.query(Match).get(match_id)
             if obj:
