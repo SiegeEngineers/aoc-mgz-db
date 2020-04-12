@@ -289,6 +289,7 @@ class Match(BASE):
     version_id = Column(Integer, ForeignKey('versions.id'))
     game_version = Column(String)
     save_version = Column(Float)
+    log_version = Column(Integer)
     build = Column(String)
     dataset_id = Column(Integer, ForeignKey('datasets.id'), index=True)
     dataset_version = Column(String)

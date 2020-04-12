@@ -13,7 +13,7 @@ from sqlalchemy.exc import IntegrityError
 
 import mgz.summary
 
-from mgzdb.platforms import PLATFORM_VOOBLY
+from mgzdb.platforms import PLATFORM_VOOBLY, PLATFORM_IGZ
 from mgzdb.schema import (
     Match, SeriesMetadata, File, Player,
     Team, User, Series, Dataset, EventMap, Chat,
@@ -79,7 +79,7 @@ def merge_platform_attributes(ladder, platform_id, match_id, data, platforms):
     return rated, ladder_id, platform_id, match_id
 
 
-def file_exists(session, file_hash, series_id):
+def file_exists(session, file_hash, series_name, series_id):
     """Check if a file exists.
 
     Update the series_id if necessary.
@@ -91,6 +91,13 @@ def file_exists(session, file_hash, series_id):
             exists.match.event_id = data[0]
             exists.match.tournament_id = data[1]
             exists.match.series_id = series_id
+            get_unique(
+                session,
+                SeriesMetadata,
+                ['series_id'],
+                name=series_name,
+                series_id=series_id
+            )
             session.commit()
         return exists.match_id
     return False
@@ -153,10 +160,10 @@ class AddFile:
             LOGGER.error("[f] error: %s", error)
             return False, error
 
-        existing_match_id = file_exists(self.session, file_hash, series_id)
+        existing_match_id = file_exists(self.session, file_hash, series_name, series_id)
         if existing_match_id:
             LOGGER.warning("[f:%s] file already exists (%d)", log_id, existing_match_id)
-            self._handle_file(file_hash, data, Version(summary.get_version()[0]))
+            #self._handle_file(file_hash, data, Version(summary.get_version()[0]))
             return None, existing_match_id
 
         try:
@@ -256,7 +263,7 @@ class AddFile:
         completed = summary.get_completed()
         restored, _ = summary.get_restored()
         has_postgame = bool(postgame)
-        version_id, game_version, save_version = summary.get_version()
+        version_id, game_version, save_version, log_version = summary.get_version()
         try:
             dataset_data = summary.get_dataset()
         except ValueError:
@@ -313,6 +320,7 @@ class AddFile:
             version_id=version_id.value,
             game_version=game_version,
             save_version=round(save_version, 2),
+            log_version=log_version,
             build=build,
             dataset=dataset,
             dataset_version=dataset_data['version'],
@@ -437,8 +445,8 @@ class AddFile:
                 LOGGER.warning("[m:%s] failed to insert players (probably bad civ id: %d)", log_id, data['civilization'])
                 return False, 'Failed to load players'
 
-            if match.platform_id == PLATFORM_VOOBLY and not user_data and player.human:
-                self._guess_match_user(player, data['name'])
+            if match.platform_id in [PLATFORM_VOOBLY, PLATFORM_IGZ] and not user_data and player.human:
+                self._guess_match_user(player, data['name'], match.platform_id)
 
 
         match.winning_team_id = winning_team_id
@@ -507,19 +515,20 @@ class AddFile:
             if not player.rate_snapshot:
                 player.rate_snapshot = user.get('rate_snapshot')
 
-    def _guess_match_user(self, player, name):
+    def _guess_match_user(self, player, name, platform_id):
         """Guess Voobly User from a player name."""
         try:
-            user_id = str(self.platforms[PLATFORM_VOOBLY].find_user(name.lstrip('+')))
+            user_id = str(self.platforms[platform_id].find_user(name.lstrip('+')))
             get_unique(
                 self.session,
                 User, ['id', 'platform_id'],
                 id=user_id,
-                platform_id=PLATFORM_VOOBLY
+                platform_id=platform_id
             )
             player.user_id = user_id
+            player.user_name = name.lstrip('+')
         except RuntimeError as error:
-            LOGGER.warning("failed to lookup Voobly user: %s", error)
+            LOGGER.warning("failed to lookup %s user: %s", platform_id, error)
 
     def _handle_series(self, series_id, series_name, map_data, log_id):
         """Handle series-related tasks."""

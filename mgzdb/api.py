@@ -10,6 +10,7 @@ from datetime import datetime
 
 from mgzdb.add import AddFile
 from mgzdb.schema import get_session, File, Match
+from mgzdb.util import parse_filename
 
 LOGGER = logging.getLogger(__name__)
 
@@ -101,6 +102,7 @@ class API: # pylint: disable=too-many-instance-attributes
 
     def add_zip(self, platform_id, zip_path):
         """Add matches via zip file."""
+        guess = platform_id == 'auto'
         try:
             if zip_path.endswith('zip'):
                 cf = zipfile.ZipFile(zip_path)
@@ -121,12 +123,23 @@ class API: # pylint: disable=too-many-instance-attributes
             for filename in sorted(series_zip.namelist()):
                 if filename.endswith('/'):
                     continue
-                if not (filename.endswith('.mgz') or filename.endswith('.mgx')):
+                if not (filename.endswith('.mgz') or filename.endswith('.mgx') or filename.endswith('.mgl')):
                     continue
                 LOGGER.info("[%s] processing member %s", os.path.basename(zip_path), filename)
                 played, _ = parse_filename(os.path.basename(filename))
                 if not played:
                     played = datetime.fromtimestamp(os.path.getmtime(os.path.join(self.temp_dir.name, filename)))
+                if guess and played:
+                    if played >= datetime(2009, 9, 17):
+                        platform_id = 'voobly'
+                    elif played < datetime(2009, 9, 17) and played >= datetime(2007, 6, 25):
+                        platform_id = 'igz'
+                    elif played < datetime(2007, 6, 25) and played >= datetime(2006, 8, 1):
+                        platform_id = 'gamepark'
+                    elif played < datetime(2006, 8, 1):
+                        platform_id = 'zone'
+                else:
+                    platform_id = None
                 self.add_file(
                     os.path.join(self.temp_dir.name, filename),
                     os.path.basename(zip_path),

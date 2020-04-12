@@ -12,9 +12,10 @@ setup(
     packages=find_packages(),
     install_requires=[
         'coloredlogs==10.0',
-        'mgz>=1.3.7',
+        'mgz>=1.4.2',
         'psycopg2-binary==2.8.4',
         'python-aoc-qq>=1.0.4',
+        'rarfile==3.1',
         'SQLAlchemy==1.3.12',
         'voobly>=1.3.1'
     ],

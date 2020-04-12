@@ -56,7 +56,7 @@ def parse_series_path(path):
     if challonge:
         challonge_id = filename[:challonge.end()]
         start = challonge.end() + 1
-    manual_pattern = re.compile(r'.+?\-[0-9]+\-[0-9]+')
+    manual_pattern = re.compile(r'(.+?\-[0-9]+\-[0-9]+)(?!\-[0-9])')
     manual = manual_pattern.match(filename)
     if manual:
         challonge_id = filename[manual.start():manual.end()]

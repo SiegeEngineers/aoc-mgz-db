@@ -5,6 +5,7 @@ import voobly
 
 PLATFORM_VOOBLY = 'voobly'
 PLATFORM_VOOBLYCN = 'vooblycn'
+PLATFORM_IGZ = 'igz'
 PLATFORM_QQ = 'qq'
 VOOBLY_PLATFORMS = [PLATFORM_VOOBLY, PLATFORM_VOOBLYCN]
 QQ_LADDERS = {
@@ -157,4 +158,5 @@ def factory(voobly_key=None, voobly_username=None, voobly_password=None):
         version=id
     )) for id in VOOBLY_PLATFORMS})
     sessions[PLATFORM_QQ] = QQSession(aocqq.get_session())
+    sessions[PLATFORM_IGZ] = sessions[PLATFORM_VOOBLY]
     return sessions
