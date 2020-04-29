@@ -1,16 +1,22 @@
 """Platform interface."""
 
+import reliclink
+import pickle
+import os
+
 import aocqq
 import voobly
 
 PLATFORM_VOOBLY = 'voobly'
 PLATFORM_VOOBLYCN = 'vooblycn'
 PLATFORM_IGZ = 'igz'
+PLATFORM_RELICLINK = 'de'
 PLATFORM_QQ = 'qq'
 VOOBLY_PLATFORMS = [PLATFORM_VOOBLY, PLATFORM_VOOBLYCN]
 QQ_LADDERS = {
     'W': 1
 }
+RELICLINK_CACHE = 'reliclink_match_cache.pickle'
 
 # pylint: disable=abstract-method
 
@@ -145,7 +151,49 @@ class QQSession(PlatformSession):
             raise ValueError('could not find ladder id')
 
 
-def factory(voobly_key=None, voobly_username=None, voobly_password=None):
+class ReliclinkSession(PlatformSession):
+
+    def download_rec(self, url, target):
+        """Download a rec."""
+        try:
+            return reliclink.download_rec(self.session, url, target)
+        except reliclink.ReliclinkError:
+            raise RuntimeError('could not get rec')
+
+    def get_match(self, match_id):
+        """Use match cache to lookup match data until API endpoint is found."""
+        if not os.path.exists(RELICLINK_CACHE):
+            raise RuntimeError('no cache')
+        with open(RELICLINK_CACHE, 'rb') as handle:
+            matches = pickle.load(handle)
+        for match in matches:
+            if match_id == str(match['match_id']):
+                return match
+        raise RuntimeError('match not in cache')
+
+    def get_ladder_matches(self, ladder_id, from_timestamp=None, limit=None):
+        """Get ladder matches."""
+        try:
+            matches = reliclink.get_ladder_matches(self.session, ladder_id, from_timestamp, limit)
+            with open(RELICLINK_CACHE, 'wb') as handle:
+                pickle.dump(matches, handle)
+            return matches
+        except reliclink.ReliclinkError:
+            raise RuntimeError('could not get ladder matches')
+
+    def get_user_matches(self, user_id, from_timestamp=None, limit=None):
+        """Get user matches."""
+        matches = reliclink.get_user_matches(self.session, user_id, limit)
+        with open(RELICLINK_CACHE, 'wb') as handle:
+            pickle.dump(matches, handle)
+        return matches
+
+    def lookup_ladder_id(self, ladder_name):
+        """Lookup ladder ID."""
+        return reliclink.lookup_ladder_id(ladder_name)
+
+
+def factory(voobly_key=None, voobly_username=None, voobly_password=None, reliclink_username=None, reliclink_password=None, reliclink_session_id=None):
     """Platform session factory.
 
     Produce a session for all supported platforms.
@@ -159,4 +207,5 @@ def factory(voobly_key=None, voobly_username=None, voobly_password=None):
     )) for id in VOOBLY_PLATFORMS})
     sessions[PLATFORM_QQ] = QQSession(aocqq.get_session())
     sessions[PLATFORM_IGZ] = sessions[PLATFORM_VOOBLY]
+    sessions[PLATFORM_RELICLINK] = ReliclinkSession(reliclink.get_session(username=reliclink_username, password=reliclink_password, session_id=reliclink_session_id))
     return sessions

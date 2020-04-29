@@ -41,6 +41,10 @@ def has_transposition(user_data, players):
     if not user_data:
         return False
     from_rec = {}
+    if not all(['color_id' in p for p in user_data]):
+        return False
+    if not all(['username' in p for p in user_data]):
+        return False
     for player in players:
         from_rec[player['color_id']] = player['name']
     from_user_data = {}
@@ -74,7 +78,7 @@ def merge_platform_attributes(ladder, platform_id, match_id, data, platforms):
     if platform_id:
         try:
             ladder_id = platforms[platform_id].lookup_ladder_id(ladder)
-        except (KeyError, ValueError):
+        except (KeyError, ValueError, NotImplementedError):
             ladder_id = None
     return rated, ladder_id, platform_id, match_id
 
@@ -494,6 +498,10 @@ class AddFile:
     def _update_match_users(self, platform_id, match_id, user_data):
         """Update Voobly User info on Match."""
         if not user_data:
+            return
+        if not all(['color_id' in p for p in user_data]):
+            return
+        if not all(['username' in p for p in user_data]):
             return
         for user in user_data:
             try:
