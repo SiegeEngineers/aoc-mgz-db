@@ -1,6 +1,5 @@
 """CLI for MGZ database."""
 import argparse
-import datetime
 import logging
 import os
 
@@ -36,8 +35,7 @@ def main(args): # pylint: disable=too-many-branches
         # File
         if args.subcmd == SUBCMD_FILE:
             for rec in args.rec_path:
-                played = None #datetime.datetime.fromtimestamp(os.path.getmtime(rec))
-                db_api.add_file(rec, args.source, None, played=played)
+                db_api.add_file(rec, args.source, None)
 
         # Match
         elif args.subcmd == SUBCMD_MATCH:

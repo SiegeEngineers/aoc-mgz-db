@@ -5,8 +5,9 @@ import logging
 import os
 import tempfile
 import zipfile
-import rarfile
 from datetime import datetime
+
+import rarfile
 
 from mgzdb.add import AddFile
 from mgzdb.schema import get_session, File, Match
@@ -80,10 +81,10 @@ class API: # pylint: disable=too-many-instance-attributes
                 user_data=match['players']
             )
 
-    def add_series(self, zip_path, series=None, series_id=None):
+    def add_series(self, archive_path, series=None, series_id=None):
         """Add a series via zip file."""
-        with zipfile.ZipFile(zip_path) as series_zip:
-            LOGGER.info("[%s] opened archive", os.path.basename(zip_path))
+        with zipfile.ZipFile(archive_path) as series_zip:
+            LOGGER.info("[%s] opened archive", os.path.basename(archive_path))
             for zip_member in series_zip.infolist():
                 series_zip.extract(zip_member, path=self.temp_dir.name)
                 date_time = time.mktime(zip_member.date_time + (0, 0, -1))
@@ -91,41 +92,41 @@ class API: # pylint: disable=too-many-instance-attributes
             for filename in sorted(series_zip.namelist()):
                 if filename.endswith('/'):
                     continue
-                LOGGER.info("[%s] processing member %s", os.path.basename(zip_path), filename)
+                LOGGER.info("[%s] processing member %s", os.path.basename(archive_path), filename)
                 self.add_file(
                     os.path.join(self.temp_dir.name, filename),
-                    os.path.basename(zip_path),
+                    os.path.basename(archive_path),
                     series,
                     series_id
                 )
-            LOGGER.info("[%s] finished", os.path.basename(zip_path))
+            LOGGER.info("[%s] finished", os.path.basename(archive_path))
 
-    def add_zip(self, platform_id, zip_path):
+    def add_zip(self, platform_id, archive_path):
         """Add matches via zip file."""
         guess = platform_id == 'auto'
         try:
-            if zip_path.endswith('zip'):
-                cf = zipfile.ZipFile(zip_path)
-            elif zip_path.endswith('rar'):
-                cf = rarfile.RarFile(zip_path)
+            if archive_path.endswith('zip'):
+                compressed = zipfile.ZipFile(archive_path)
+            elif archive_path.endswith('rar'):
+                compressed = rarfile.RarFile(archive_path)
             else:
-                LOGGER.error("[%s] not a valid archive", os.path.basename(zip_path))
+                LOGGER.error("[%s] not a valid archive", os.path.basename(archive_path))
                 return
         except zipfile.BadZipFile:
-            LOGGER.error("[%s] bad zip file", os.path.basename(zip_path))
+            LOGGER.error("[%s] bad zip file", os.path.basename(archive_path))
             return
-        with cf as series_zip:
-            LOGGER.info("[%s] opened archive", os.path.basename(zip_path))
-            for zi in series_zip.infolist():
-                series_zip.extract(zi, path=self.temp_dir.name)
-                date_time = time.mktime(zi.date_time + (0, 0, -1))
-                os.utime(os.path.join(self.temp_dir.name, zi.filename), (date_time, date_time))
-            for filename in sorted(series_zip.namelist()):
+        with compressed as series_zip:
+            LOGGER.info("[%s] opened archive", os.path.basename(archive_path))
+            for compressed_file in compressed.infolist():
+                series_zip.extract(compressed_file, path=self.temp_dir.name)
+                date_time = time.mktime(compressed_file.date_time + (0, 0, -1))
+                os.utime(os.path.join(self.temp_dir.name, compressed_file.filename), (date_time, date_time))
+            for filename in sorted(compressed.namelist()):
                 if filename.endswith('/'):
                     continue
                 if not (filename.endswith('.mgz') or filename.endswith('.mgx') or filename.endswith('.mgl')):
                     continue
-                LOGGER.info("[%s] processing member %s", os.path.basename(zip_path), filename)
+                LOGGER.info("[%s] processing member %s", os.path.basename(archive_path), filename)
                 played, _ = parse_filename(os.path.basename(filename))
                 if not played:
                     played = datetime.fromtimestamp(os.path.getmtime(os.path.join(self.temp_dir.name, filename)))
@@ -142,11 +143,11 @@ class API: # pylint: disable=too-many-instance-attributes
                     platform_id = None
                 self.add_file(
                     os.path.join(self.temp_dir.name, filename),
-                    os.path.basename(zip_path),
+                    os.path.basename(archive_path),
                     platform_id=platform_id,
                     played=played
                 )
-            LOGGER.info("[%s] finished", os.path.basename(zip_path))
+            LOGGER.info("[%s] finished", os.path.basename(archive_path))
 
     def remove(self, file_id=None, match_id=None):
         """Remove a file, match, or series.
@@ -158,7 +159,7 @@ class API: # pylint: disable=too-many-instance-attributes
             self.session.delete(obj)
             self.session.commit()
             return
-        elif match_id:
+        if match_id:
             obj = self.session.query(Match).get(match_id)
             if obj:
                 for mgz in obj.files:

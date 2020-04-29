@@ -478,17 +478,17 @@ class AddFile:
         match.ladder_id = data['leaderboard_id']
         if data['version']:
             match.build = '101.101.{}.0'.format(data['version'])
-        for p in data['players']:
-            if not p['profile_id']:
+        for pdata in data['players']:
+            if not pdata['profile_id']:
                 continue
             try:
-                player = self.session.query(Player).filter_by(match_id=match.id, user_id=str(p['profile_id'])).one()
+                player = self.session.query(Player).filter_by(match_id=match.id, user_id=str(pdata['profile_id'])).one()
             except NoResultFound:
                 LOGGER.error("failed to find p%d to update platform user data", p['color'])
                 continue
-            LOGGER.info("[m:%s] updating platform user data for p%d", match.hash[:LOG_ID_LENGTH], p['color'])
-            get_unique(self.session, User, ['id', 'platform_id'], id=str(p['profile_id']), platform_id=match.platform_id)
-            player.rate_snapshot = p['rating']
+            LOGGER.info("[m:%s] updating platform user data for p%d", match.hash[:LOG_ID_LENGTH], pdata['color'])
+            get_unique(self.session, User, ['id', 'platform_id'], id=str(pdata['profile_id']), platform_id=match.platform_id)
+            player.rate_snapshot = pdata['rating']
 
 
     def _update_match_users(self, platform_id, match_id, user_data):
