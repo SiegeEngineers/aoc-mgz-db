@@ -1,6 +1,11 @@
 """Platform interface."""
 
-import reliclink
+try: # private module
+    import reliclink
+    PLATFORM_RELICLINK = 'de'
+except ModuleNotFoundError:
+    PLATFORM_RELICLINK = None
+
 import pickle
 import os
 
@@ -10,7 +15,6 @@ import voobly
 PLATFORM_VOOBLY = 'voobly'
 PLATFORM_VOOBLYCN = 'vooblycn'
 PLATFORM_IGZ = 'igz'
-PLATFORM_RELICLINK = 'de'
 PLATFORM_QQ = 'qq'
 VOOBLY_PLATFORMS = [PLATFORM_VOOBLY, PLATFORM_VOOBLYCN]
 QQ_LADDERS = {
@@ -193,7 +197,8 @@ class ReliclinkSession(PlatformSession):
         return reliclink.lookup_ladder_id(ladder_name)
 
 
-def factory(voobly_key=None, voobly_username=None, voobly_password=None, reliclink_username=None, reliclink_password=None, reliclink_session_id=None):
+def factory(voobly_key=None, voobly_username=None, voobly_password=None,
+            reliclink_username=None, reliclink_password=None, reliclink_session_id=None):
     """Platform session factory.
 
     Produce a session for all supported platforms.
@@ -207,5 +212,10 @@ def factory(voobly_key=None, voobly_username=None, voobly_password=None, relicli
     )) for id in VOOBLY_PLATFORMS})
     sessions[PLATFORM_QQ] = QQSession(aocqq.get_session())
     sessions[PLATFORM_IGZ] = sessions[PLATFORM_VOOBLY]
-    sessions[PLATFORM_RELICLINK] = ReliclinkSession(reliclink.get_session(username=reliclink_username, password=reliclink_password, session_id=reliclink_session_id))
+    if PLATFORM_RELICLINK:
+        sessions[PLATFORM_RELICLINK] = ReliclinkSession(reliclink.get_session(
+            username=reliclink_username,
+            password=reliclink_password,
+            session_id=reliclink_session_id
+        ))
     return sessions

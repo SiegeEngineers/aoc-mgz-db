@@ -83,7 +83,18 @@ class API: # pylint: disable=too-many-instance-attributes
 
     def add_series(self, archive_path, series=None, series_id=None):
         """Add a series via zip file."""
-        with zipfile.ZipFile(archive_path) as series_zip:
+        try:
+            if archive_path.endswith('zip'):
+                compressed = zipfile.ZipFile(archive_path)
+            elif archive_path.endswith('rar'):
+                compressed = rarfile.RarFile(archive_path)
+            else:
+                LOGGER.error("[%s] not a valid archive", os.path.basename(archive_path))
+                return
+        except zipfile.BadZipFile:
+            LOGGER.error("[%s] bad zip file", os.path.basename(archive_path))
+            return
+        with compressed as series_zip:
             LOGGER.info("[%s] opened archive", os.path.basename(archive_path))
             for zip_member in series_zip.infolist():
                 series_zip.extract(zip_member, path=self.temp_dir.name)
@@ -93,11 +104,15 @@ class API: # pylint: disable=too-many-instance-attributes
                 if filename.endswith('/'):
                     continue
                 LOGGER.info("[%s] processing member %s", os.path.basename(archive_path), filename)
+                played, _ = parse_filename(os.path.basename(filename))
+                if not played:
+                    played = datetime.fromtimestamp(os.path.getmtime(os.path.join(self.temp_dir.name, filename)))
                 self.add_file(
                     os.path.join(self.temp_dir.name, filename),
                     os.path.basename(archive_path),
                     series,
-                    series_id
+                    series_id,
+                    played=played
                 )
             LOGGER.info("[%s] finished", os.path.basename(archive_path))
 

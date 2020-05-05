@@ -36,6 +36,19 @@ class Person(BASE):
     id = Column(Integer, primary_key=True)
     name = Column(String, unique=True)
     country = Column(String)
+    aoeelo_id = Column(Integer)
+    aoeelo_rate = Column(Integer)
+    aoeelo_rank = Column(Integer)
+    esportsearnings_id = Column(Integer)
+    earnings = Column(Float)
+    first_name = Column(String)
+    last_name = Column(String)
+    portrait = Column(LargeBinary)
+    twitch = Column(String)
+    mixer = Column(String)
+    youtube = Column(String)
+    discord = Column(String)
+    douyu = Column(String)
 
 
 class Event(BASE):
@@ -97,6 +110,7 @@ class Dataset(BASE):
     __tablename__ = 'datasets'
     id = Column(Integer, primary_key=True)
     name = Column(String)
+    short = Column(String)
 
 
 class Civilization(BASE):

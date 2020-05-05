@@ -305,7 +305,7 @@ class AddFile:
             return False, 'Dataset not supported'
 
         series, tournament, event, event_map_id = self._handle_series(series_id, series_name, map_data, log_id)
-        if series:
+        if series and series.played:
             played = series.played
 
         objects = summary.get_objects()
@@ -482,6 +482,7 @@ class AddFile:
         match.ladder_id = data['leaderboard_id']
         if data['version']:
             match.build = '101.101.{}.0'.format(data['version'])
+            match.dataset_version = match.build
         for pdata in data['players']:
             if not pdata['profile_id']:
                 continue
