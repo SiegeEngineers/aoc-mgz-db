@@ -11,11 +11,10 @@ from mgzdb.schema import (
 
 
 LOGGER = logging.getLogger(__name__)
-ALLOWED = False
-ALLOWED_LADDERS = [131] #, 132]
-ALLOWED_RATE = 1900
-SUPPORTED_DATASETS = [1]
-STARTING_SUPPORTED_DATASETS = [0, 1]
+ALLOWED = True
+ALLOWED_LADDERS = [0, 1, 2, 3, 4] #131] #, 132]
+ALLOWED_RATE = 0 #1900
+SUPPORTED_DATASETS = [100] #[1, 100]
 STARTING_SUPPORTED_DATASETS = [0, 1, 100, 200]
 SAMPLE_INTERVAL = 30000
 
@@ -26,7 +25,7 @@ def allow_extraction(players, ladder_id, dataset_id):
     rate_avg = rate_sum / len(players)
     return (
         ALLOWED and
-        ladder_id in ALLOWED_LADDERS and
+        #ladder_id in ALLOWED_LADDERS and
         dataset_id in SUPPORTED_DATASETS and
         rate_avg >= ALLOWED_RATE
     )
@@ -128,4 +127,4 @@ def save_extraction(session, summary, ladder_id, match_id, dataset_id, log_id, f
     session.bulk_save_objects(objs)
     session.commit()
     LOGGER.info("[m:%s] completed full extraction", log_id)
-    return True, dict(version=extracted['version'], interval=SAMPLE_INTERVAL, runtime=extracted['runtime'])
+    return True, dict(version=extracted['version'], interval=extracted['interval'] if 'interval' in extracted else SAMPLE_INTERVAL, runtime=extracted['runtime'])

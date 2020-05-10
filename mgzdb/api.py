@@ -10,8 +10,12 @@ from datetime import datetime
 import rarfile
 
 from mgzdb.add import AddFile
-from mgzdb.schema import get_session, File, Match
 from mgzdb.util import parse_filename
+from mgzdb.schema import (
+    get_session,
+    ObjectInstance, Market, Timeseries, Research, get_session, Match, File,
+    Chat, ActionLog, Transaction, Tribute, Formation
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -154,7 +158,9 @@ class API: # pylint: disable=too-many-instance-attributes
                         platform_id = 'gamepark'
                     elif played < datetime(2006, 8, 1):
                         platform_id = 'zone'
-                else:
+                    else:
+                        platform_id = None
+                elif guess and not played:
                     platform_id = None
                 self.add_file(
                     os.path.join(self.temp_dir.name, filename),
@@ -185,6 +191,15 @@ class API: # pylint: disable=too-many-instance-attributes
                         self.session.delete(team)
                     for player in obj.players:
                         self.session.delete(player)
+                self.session.query(ObjectInstance).filter(ObjectInstance.match_id==match_id).delete()
+                self.session.query(Market).filter(Market.match_id==match_id).delete()
+                self.session.query(Timeseries).filter(Timeseries.match_id==match_id).delete()
+                self.session.query(Research).filter(Research.match_id==match_id).delete()
+                self.session.query(Chat).filter(Chat.match_id==match_id).delete()
+                self.session.query(ActionLog).filter(ActionLog.match_id==match_id).delete()
+                self.session.query(Tribute).filter(Tribute.match_id==match_id).delete()
+                self.session.query(Transaction).filter(Transaction.match_id==match_id).delete()
+                self.session.query(Formation).filter(Formation.match_id==match_id).delete()
                 self.session.commit()
                 self.session.delete(obj)
                 self.session.commit()

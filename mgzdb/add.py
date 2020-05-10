@@ -90,21 +90,26 @@ def file_exists(session, file_hash, series_name, series_id):
     """
     exists = session.query(File).filter_by(hash=file_hash).one_or_none()
     if exists:
-        if not exists.match.series_id and series_id:
-            data = session.query(Tournament.event_id, Tournament.id).join(Round).join(Series).filter(Series.id == series_id).one_or_none()
-            exists.match.event_id = data[0]
-            exists.match.tournament_id = data[1]
-            exists.match.series_id = series_id
-            get_unique(
-                session,
-                SeriesMetadata,
-                ['series_id'],
-                name=series_name,
-                series_id=series_id
-            )
-            session.commit()
-        return exists.match_id
+        return series_match_exists(session, exists.match, series_id, series_name)
     return False
+
+
+def series_match_exists(session, match, series_id, series_name):
+    if not match.series_id and series_id:
+        data = session.query(Tournament.event_id, Tournament.id).join(Round).join(Series).filter(Series.id == series_id).one_or_none()
+        match.event_id = data[0]
+        match.tournament_id = data[1]
+        match.series_id = series_id
+        get_unique(
+            session,
+            SeriesMetadata,
+            ['series_id'],
+            name=series_name,
+            series_id=series_id
+        )
+        session.commit()
+    return match.id
+
 
 
 def save_chat(session, chats, match_id):
@@ -149,7 +154,10 @@ class AddFile:
 
         try:
             handle = io.BytesIO(data)
-            summary = mgz.summary.Summary(handle, self.playback)
+            playback = self.playback
+            if rec_path.endswith('aoe2record') and os.path.exists(rec_path.replace('.aoe2record', '.json')):
+                playback = open(rec_path.replace('.aoe2record', '.json'))
+            summary = mgz.summary.Summary(handle, playback)
             # Hash against body only because header can vary based on compression
             file_hash = summary.get_file_hash()
             log_id = file_hash[:LOG_ID_LENGTH]
@@ -190,6 +198,7 @@ class AddFile:
                 where |= (Match.platform_match_id == platform_match_id)
             match = self.session.query(Match).filter(where).one()
             LOGGER.info("[f:%s] match already exists (%d); appending", log_id, match.id)
+            series_match_exists(self.session, match, series_id, series_name)
         except MultipleResultsFound:
             LOGGER.error("[f:%s] mismatched hash and match id: %s, %s", log_id, match_hash, platform_match_id)
             return False, 'Mismatched hash and match id'
@@ -248,7 +257,6 @@ class AddFile:
     ):
         """Add a match."""
         try:
-            postgame = summary.get_postgame()
             duration = summary.get_duration()
         except RuntimeError:
             LOGGER.error("[m] failed to get duration")
@@ -266,7 +274,7 @@ class AddFile:
             return False, 'Invalid map'
         completed = summary.get_completed()
         restored, _ = summary.get_restored()
-        has_postgame = bool(postgame)
+        has_postgame = summary.has_achievements()
         version_id, game_version, save_version, log_version = summary.get_version()
         try:
             dataset_data = summary.get_dataset()
