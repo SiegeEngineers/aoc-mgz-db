@@ -482,7 +482,8 @@ class AddFile:
             LOGGER.warning('failed to get aoe2.net data')
             return
         data = resp.json()
-        match.played = datetime.fromtimestamp(data['started'])
+        if data['started']:
+            match.played = datetime.fromtimestamp(data['started'])
         match.rated = data['ranked']
         match.lobby_private = data['has_password']
         match.lobby_opened = datetime.fromtimestamp(data['opened'])

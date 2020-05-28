@@ -11,7 +11,7 @@ from mgzdb.schema import (
 
 
 LOGGER = logging.getLogger(__name__)
-ALLOWED = True
+ALLOWED = False
 ALLOWED_LADDERS = [0, 1, 2, 3, 4] #131] #, 132]
 ALLOWED_RATE = 0 #1900
 SUPPORTED_DATASETS = [100] #[1, 100]

@@ -137,13 +137,17 @@ class API: # pylint: disable=too-many-instance-attributes
         with compressed as series_zip:
             LOGGER.info("[%s] opened archive", os.path.basename(archive_path))
             for compressed_file in compressed.infolist():
-                series_zip.extract(compressed_file, path=self.temp_dir.name)
-                date_time = time.mktime(compressed_file.date_time + (0, 0, -1))
-                os.utime(os.path.join(self.temp_dir.name, compressed_file.filename), (date_time, date_time))
+                try:
+                    series_zip.extract(compressed_file, path=self.temp_dir.name)
+                    date_time = time.mktime(compressed_file.date_time + (0, 0, -1))
+                    os.utime(os.path.join(self.temp_dir.name, compressed_file.filename), (date_time, date_time))
+                except (zipfile.BadZipFile, rarfile.Error):
+                    LOGGER.error("Failed to extract file")
+                    return
             for filename in sorted(compressed.namelist()):
                 if filename.endswith('/'):
                     continue
-                if not (filename.endswith('.mgz') or filename.endswith('.mgx') or filename.endswith('.mgl')):
+                if not (filename.endswith('.mgz') or filename.endswith('.mgx') or filename.endswith('.mgl') or filename.endswith('.aoe2record')):
                     continue
                 LOGGER.info("[%s] processing member %s", os.path.basename(archive_path), filename)
                 played, _ = parse_filename(os.path.basename(filename))
