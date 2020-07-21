@@ -156,9 +156,9 @@ class API: # pylint: disable=too-many-instance-attributes
                 if guess and played:
                     if played >= datetime(2009, 9, 17):
                         platform_id = 'voobly'
-                    elif played < datetime(2009, 9, 17) and played >= datetime(2007, 6, 25):
+                    elif played < datetime(2009, 9, 17) and played >= datetime(2007, 9, 20):
                         platform_id = 'igz'
-                    elif played < datetime(2007, 6, 25) and played >= datetime(2006, 8, 1):
+                    elif played < datetime(2007, 9, 20) and played >= datetime(2006, 8, 1):
                         platform_id = 'gamepark'
                     elif played < datetime(2006, 8, 1):
                         platform_id = 'zone'

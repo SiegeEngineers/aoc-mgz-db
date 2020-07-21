@@ -20,8 +20,8 @@ from mgzdb.schema import (
     Tournament, Round
 )
 from mgzdb.util import parse_filename, save_file, get_unique
-from mgzdb.compress import compress, compress_tiles
-from mgzdb.extract import save_starting_state, save_extraction
+from mgzdb.compress import compress, compress_tiles, compress_objects
+from mgzdb.extract import save_extraction
 from mgz.util import Version
 from mgz.summary.chat import Chat as ChatType
 
@@ -83,19 +83,20 @@ def merge_platform_attributes(ladder, platform_id, match_id, data, platforms):
     return rated, ladder_id, platform_id, match_id
 
 
-def file_exists(session, file_hash, series_name, series_id):
+def file_exists(session, file_hash, series_name, series_id, modified):
     """Check if a file exists.
 
     Update the series_id if necessary.
     """
     exists = session.query(File).filter_by(hash=file_hash).one_or_none()
     if exists:
+        #exists.modified = modified
         return series_match_exists(session, exists.match, series_id, series_name)
     return False
 
 
 def series_match_exists(session, match, series_id, series_name):
-    if not match.series_id and series_id:
+    if series_id:
         data = session.query(Tournament.event_id, Tournament.id).join(Round).join(Series).filter(Series.id == series_id).one_or_none()
         match.event_id = data[0]
         match.tournament_id = data[1]
@@ -172,7 +173,7 @@ class AddFile:
             LOGGER.error("[f] error: %s", error)
             return False, error
 
-        existing_match_id = file_exists(self.session, file_hash, series_name, series_id)
+        existing_match_id = file_exists(self.session, file_hash, series_name, series_id, modified)
         if existing_match_id:
             LOGGER.warning("[f:%s] file already exists (%d)", log_id, existing_match_id)
             #self._handle_file(file_hash, data, Version(summary.get_version()[0]))
@@ -339,6 +340,7 @@ class AddFile:
             ladder_id=ladder_id,
             rated=rated,
             lobby_name=platform_data['lobby_name'],
+            objects=compress_objects(objects['objects']),
             builtin_map_id=map_data['id'],
             event_map_id=event_map_id,
             map_size_id=map_data['dimension'],
@@ -468,8 +470,6 @@ class AddFile:
             match.state_reader_version = attrs['version']
             match.state_reader_interval = attrs['interval']
             match.state_reader_runtime = attrs['runtime']
-        else:
-            save_starting_state(self.session, objects['objects'], match.id, dataset_data['id'])
 
         save_chat(self.session, summary.get_chat(), match.id)
         return match, None

@@ -78,6 +78,8 @@ def save_extraction(session, summary, ladder_id, match_id, dataset_id, log_id, f
         record['finished'] = timedelta(milliseconds=record['finished']) if record['finished'] else None
         objs.append(Research(match_id=match_id, dataset_id=dataset_id, **record))
     for record in extracted['objects']:
+        if record['initial_object_id'] in [96, 709, 332, 917, 1358, 1248, 350, 888, 112]:
+            continue
         record['created'] = timedelta(milliseconds=record['created'])
         record['destroyed'] = timedelta(milliseconds=record['destroyed']) if record['destroyed'] else None
         record['building_started'] = timedelta(milliseconds=record['building_started']) if record['building_started'] else None

@@ -4,7 +4,11 @@ import unittest
 import zlib
 
 from mgz.util import Version
-from mgzdb.compress import compress, decompress, compress_rev_1, decompress_rev_1, compress_tiles, decompress_tiles
+from mgzdb.compress import (
+    compress, decompress, compress_rev_1, decompress_rev_1,
+    compress_tiles, decompress_tiles,
+    compress_objects, decompress_objects
+)
 
 
 class TestCompress(unittest.TestCase):
@@ -46,3 +50,12 @@ class TestCompress(unittest.TestCase):
         ]
         compressed_tiles = compress_tiles(tiles)
         self.assertEqual(tiles, decompress_tiles(compressed_tiles, 2))
+
+    def test_compress_objects(self):
+        objects = [
+            {'player_number': None, 'class_id': 10, 'object_id': 100, 'x': 10.5, 'y': 75},
+            {'player_number': 1, 'class_id': 70, 'object_id': 500, 'x': 20.5, 'y': 23},
+            {'player_number': 2, 'class_id': 80, 'object_id': 44, 'x': 80.5, 'y': 312}
+        ]
+        compressed_objects = compress_objects(objects)
+        self.assertEqual(objects, decompress_objects(compressed_objects))

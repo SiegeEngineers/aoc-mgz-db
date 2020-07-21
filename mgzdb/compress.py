@@ -163,10 +163,32 @@ def decompress_tiles(cdata, dimension):
     data = lzma.decompress(cdata)
     while y_coord < dimension:
         offset = ((y_coord * dimension) + x_coord) * 2
-        terrain_id, elevation = struct.unpack('<bb', data[offset:offset+2])
+        terrain_id, elevation = struct.unpack('<bb', data[offset:offset + 2])
         tiles.append({'terrain_id': terrain_id, 'elevation': elevation, 'x': x_coord, 'y': y_coord})
         x_coord += 1
         if x_coord == dimension:
             x_coord = 0
             y_coord += 1
     return tiles
+
+
+def compress_objects(objects):
+    """Compress objects."""
+    data = b''
+    for obj in objects:
+        player_num = obj['player_number'] if obj['player_number'] else 0
+        data += struct.pack('<bbhff', player_num, obj['class_id'], obj['object_id'], obj['x'], obj['y'])
+    return lzma.compress(data, filters=LZMA_FILTERS)
+
+
+def decompress_objects(odata):
+    """Decompress objects."""
+    objects = []
+    offset = 0
+    data = lzma.decompress(odata)
+    while offset < len(data):
+        player_number, class_id, object_id, x, y = struct.unpack('<bbhff', data[offset:offset + 12])
+        player_number = player_number if player_number > 0 else None
+        objects.append(dict(player_number=player_number, class_id=class_id, object_id=object_id, x=x, y=y))
+        offset += 12
+    return objects
