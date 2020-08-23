@@ -13,7 +13,7 @@ from sqlalchemy.exc import IntegrityError
 
 import mgz.summary
 
-from mgzdb.platforms import PLATFORM_VOOBLY, PLATFORM_IGZ
+from mgzdb.platforms import PLATFORM_VOOBLY, PLATFORM_IGZ, PLATFORM_DE
 from mgzdb.schema import (
     Match, SeriesMetadata, File, Player,
     Team, User, Series, Dataset, EventMap, Chat,
@@ -72,7 +72,7 @@ def merge_platform_attributes(ladder, platform_id, match_id, data, platforms):
         ladder = data['ladder']
     if data['platform_id'] and not platform_id:
         platform_id = data['platform_id']
-    if data['platform_match_id'] and not match_id:
+    if (data['platform_match_id'] and not match_id) or platform_id == PLATFORM_DE:
         match_id = data['platform_match_id']
     ladder_id = None
     if platform_id:

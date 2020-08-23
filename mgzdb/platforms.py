@@ -1,26 +1,22 @@
 """Platform interface."""
 
-try: # private module
-    import reliclink
-    PLATFORM_RELICLINK = 'de'
-except ModuleNotFoundError:
-    PLATFORM_RELICLINK = None
-
 import pickle
 import os
 
 import aocqq
+import aoeapi
 import voobly
 
 PLATFORM_VOOBLY = 'voobly'
 PLATFORM_VOOBLYCN = 'vooblycn'
 PLATFORM_IGZ = 'igz'
 PLATFORM_QQ = 'qq'
+PLATFORM_DE = 'de'
 VOOBLY_PLATFORMS = [PLATFORM_VOOBLY, PLATFORM_VOOBLYCN]
 QQ_LADDERS = {
     'W': 1
 }
-RELICLINK_CACHE = 'reliclink_match_cache.pickle'
+AOEAPI_CACHE = 'aoeapi_match_cache.pickle'
 
 # pylint: disable=abstract-method
 
@@ -155,50 +151,53 @@ class QQSession(PlatformSession):
             raise ValueError('could not find ladder id')
 
 
-class ReliclinkSession(PlatformSession):
+class DefinitiveSession(PlatformSession):
 
     def download_rec(self, url, target):
         """Download a rec."""
         try:
-            return reliclink.download_rec(self.session, url, target)
-        except reliclink.ReliclinkError:
+            return aoeapi.download_rec(url, target)
+        except aoeapi.AoeApiError:
             raise RuntimeError('could not get rec')
 
     def get_match(self, match_id):
-        """Use match cache to lookup match data until API endpoint is found."""
-        if not os.path.exists(RELICLINK_CACHE):
+        """Use match cache to lookup profile ID."""
+        if not os.path.exists(AOEAPI_CACHE):
             raise RuntimeError('no cache')
-        with open(RELICLINK_CACHE, 'rb') as handle:
+        with open(AOEAPI_CACHE, 'rb') as handle:
             matches = pickle.load(handle)
         for match in matches:
-            if match_id == str(match['match_id']):
-                return match
+            if match_id == match['match_id']:
+                return aoeapi.get_match(match['ref_profile_id'], match_id)
         raise RuntimeError('match not in cache')
 
     def get_ladder_matches(self, ladder_id, from_timestamp=None, limit=None):
         """Get ladder matches."""
         try:
-            matches = reliclink.get_ladder_matches(self.session, ladder_id, from_timestamp, limit)
-            with open(RELICLINK_CACHE, 'wb') as handle:
-                pickle.dump(matches, handle)
+            matches = aoeapi.get_ladder_matches(ladder_id, from_timestamp, limit)
+            with open(AOEAPI_CACHE, 'rb') as handle:
+                cached_matches = pickle.load(handle)
+            with open(AOEAPI_CACHE, 'wb') as handle:
+                pickle.dump(cached_matches + matches, handle)
             return matches
-        except reliclink.ReliclinkError:
+        except aoeapi.AoeApiError:
             raise RuntimeError('could not get ladder matches')
 
     def get_user_matches(self, user_id, from_timestamp=None, limit=None):
         """Get user matches."""
-        matches = reliclink.get_user_matches(self.session, user_id, limit)
-        with open(RELICLINK_CACHE, 'wb') as handle:
-            pickle.dump(matches, handle)
+        matches = aoeapi.get_user_matches(user_id, limit)
+        with open(AOEAPI_CACHE, 'rb') as handle:
+            cached_matches = pickle.load(handle)
+        with open(AOEAPI_CACHE, 'wb') as handle:
+            pickle.dump(cached_matches + matches, handle)
         return matches
 
     def lookup_ladder_id(self, ladder_name):
         """Lookup ladder ID."""
-        return reliclink.lookup_ladder_id(ladder_name)
+        return aoeapi.lookup_ladder_id(ladder_name)
 
 
-def factory(voobly_key=None, voobly_username=None, voobly_password=None,
-            reliclink_username=None, reliclink_password=None, reliclink_session_id=None):
+def factory(voobly_key=None, voobly_username=None, voobly_password=None):
     """Platform session factory.
 
     Produce a session for all supported platforms.
@@ -212,10 +211,5 @@ def factory(voobly_key=None, voobly_username=None, voobly_password=None,
     )) for id in VOOBLY_PLATFORMS})
     sessions[PLATFORM_QQ] = QQSession(aocqq.get_session())
     sessions[PLATFORM_IGZ] = sessions[PLATFORM_VOOBLY]
-    if PLATFORM_RELICLINK:
-        sessions[PLATFORM_RELICLINK] = ReliclinkSession(reliclink.get_session(
-            username=reliclink_username,
-            password=reliclink_password,
-            session_id=reliclink_session_id
-        ))
+    sessions[PLATFORM_DE] = DefinitiveSession(None)
     return sessions

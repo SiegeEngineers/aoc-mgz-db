@@ -24,9 +24,7 @@ def main(args): # pylint: disable=too-many-branches
     sessions = platforms.factory(
         voobly_username=args.voobly_username,
         voobly_password=args.voobly_password,
-        voobly_key=args.voobly_key,
-        reliclink_username=args.reliclink_username,
-        reliclink_password=args.reliclink_password
+        voobly_key=args.voobly_key
     )
 
     db_api = API(args.database, args.store_path, sessions, args.playback)
@@ -82,8 +80,6 @@ def setup():
     parser.add_argument('-vk', '--voobly-key', default=os.environ.get('VOOBLY_KEY', None))
     parser.add_argument('-vu', '--voobly-username', default=os.environ.get('VOOBLY_USERNAME', None))
     parser.add_argument('-vp', '--voobly-password', default=os.environ.get('VOOBLY_PASSWORD', None))
-    parser.add_argument('-lu', '--reliclink-username', default=os.environ.get('STEAM_USERNAME', None))
-    parser.add_argument('-lp', '--reliclink-password', default=os.environ.get('STEAM_PASSWORD', None))
 
     # Commands
     subparsers = parser.add_subparsers(dest='cmd')
