@@ -57,15 +57,6 @@ class API: # pylint: disable=too-many-instance-attributes
             LOGGER.error("not an aoc match: %s", match_id)
             return
         players = match['players']
-        chose = None
-        if single_pov:
-            for player in players:
-                if player['url']:
-                    chose = player
-                    break
-            if not chose:
-                return
-            players = [chose]
         for player in players:
             if not player['url']:
                 continue
@@ -84,6 +75,8 @@ class API: # pylint: disable=too-many-instance-attributes
                 ladder=match.get('ladder'),
                 user_data=match['players']
             )
+            if single_pov:
+                break
 
     def add_series(self, archive_path, series=None, series_id=None):
         """Add a series via zip file."""

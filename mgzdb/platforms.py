@@ -1,8 +1,5 @@
 """Platform interface."""
 
-import pickle
-import os
-
 import aocqq
 import aoeapi
 import voobly
@@ -16,7 +13,6 @@ VOOBLY_PLATFORMS = [PLATFORM_VOOBLY, PLATFORM_VOOBLYCN]
 QQ_LADDERS = {
     'W': 1
 }
-AOEAPI_CACHE = 'aoeapi_match_cache.pickle'
 
 # pylint: disable=abstract-method
 
@@ -162,35 +158,22 @@ class DefinitiveSession(PlatformSession):
 
     def get_match(self, match_id):
         """Use match cache to lookup profile ID."""
-        if not os.path.exists(AOEAPI_CACHE):
-            raise RuntimeError('no cache')
-        with open(AOEAPI_CACHE, 'rb') as handle:
-            matches = pickle.load(handle)
-        for match in matches:
-            if match_id == match['match_id']:
-                return aoeapi.get_match(match['ref_profile_id'], match_id)
-        raise RuntimeError('match not in cache')
+        try:
+            return aoeapi.get_match(match_id)
+        except aoeapi.AoeApiError:
+            raise RuntimeError('could not get match')
 
     def get_ladder_matches(self, ladder_id, from_timestamp=None, limit=None):
         """Get ladder matches."""
         try:
             matches = aoeapi.get_ladder_matches(ladder_id, from_timestamp, limit)
-            with open(AOEAPI_CACHE, 'rb') as handle:
-                cached_matches = pickle.load(handle)
-            with open(AOEAPI_CACHE, 'wb') as handle:
-                pickle.dump(cached_matches + matches, handle)
             return matches
         except aoeapi.AoeApiError:
             raise RuntimeError('could not get ladder matches')
 
     def get_user_matches(self, user_id, from_timestamp=None, limit=None):
         """Get user matches."""
-        matches = aoeapi.get_user_matches(user_id, limit)
-        with open(AOEAPI_CACHE, 'rb') as handle:
-            cached_matches = pickle.load(handle)
-        with open(AOEAPI_CACHE, 'wb') as handle:
-            pickle.dump(cached_matches + matches, handle)
-        return matches
+        return aoeapi.get_user_matches(user_id, limit)
 
     def lookup_ladder_id(self, ladder_name):
         """Lookup ladder ID."""

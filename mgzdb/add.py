@@ -72,7 +72,7 @@ def merge_platform_attributes(ladder, platform_id, match_id, data, platforms):
         ladder = data['ladder']
     if data['platform_id'] and not platform_id:
         platform_id = data['platform_id']
-    if (data['platform_match_id'] and not match_id) or platform_id == PLATFORM_DE:
+    if data['platform_match_id'] and not match_id:
         match_id = data['platform_match_id']
     ladder_id = None
     if platform_id:
@@ -477,7 +477,10 @@ class AddFile:
     def _update_match_de(self, match):
         if match.platform_id != 'de':
             return
-        resp = requests.get('https://aoe2.net/api/match?uuid={}'.format(match.platform_match_id))
+        field = 'uuid'
+        if match.platform_match_id.isdigit():
+            field = 'match_id'
+        resp = requests.get('https://aoe2.net/api/match?{}={}'.format(field, match.platform_match_id))
         if resp.status_code != 200:
             LOGGER.warning('failed to get aoe2.net data')
             return
