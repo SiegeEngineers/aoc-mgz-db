@@ -501,7 +501,7 @@ class AddFile:
             try:
                 player = self.session.query(Player).filter_by(match_id=match.id, user_id=str(pdata['profile_id'])).one()
             except NoResultFound:
-                LOGGER.error("failed to find p%d to update platform user data", p['color'])
+                LOGGER.error("failed to find p%d to update platform user data", pdata['color'])
                 continue
             LOGGER.info("[m:%s] updating platform user data for p%d", match.hash[:LOG_ID_LENGTH], pdata['color'])
             get_unique(self.session, User, ['id', 'platform_id'], id=str(pdata['profile_id']), platform_id=match.platform_id)
