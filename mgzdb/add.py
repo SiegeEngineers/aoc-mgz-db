@@ -288,7 +288,7 @@ class AddFile:
         players = list(summary.get_players())
         mirror = summary.get_mirror()
         if platform_match_id:
-            log_id += ':{}'.format(platform_match_id)
+            log_id += f':{platform_match_id}'
 
         if restored:
             LOGGER.error("[m:%s] is restored game", log_id)
@@ -480,7 +480,7 @@ class AddFile:
         field = 'uuid'
         if match.platform_match_id.isdigit():
             field = 'match_id'
-        resp = requests.get('https://aoe2.net/api/match?{}={}'.format(field, match.platform_match_id))
+        resp = requests.get(f'https://aoe2.net/api/match?{field}={match.platform_match_id}')
         if resp.status_code != 200:
             LOGGER.warning('failed to get aoe2.net data')
             return
@@ -493,7 +493,7 @@ class AddFile:
         match.server = data['server']
         match.ladder_id = data['leaderboard_id']
         if data['version']:
-            match.build = '101.101.{}.0'.format(data['version'])
+            match.build = f"101.101.{data['version']}.0"
             match.dataset_version = match.build
         for pdata in data['players']:
             if not pdata['profile_id']:
@@ -587,7 +587,7 @@ class AddFile:
 
     def _handle_file(self, file_hash, data, version):
         """Handle file: compress and store."""
-        compressed_filename = '{}{}'.format(file_hash, COMPRESSED_EXT)
+        compressed_filename = f'{file_hash}{COMPRESSED_EXT}'
         compressed_data = compress(io.BytesIO(data), version=version)
         destination = save_file(compressed_data, self.store_path, compressed_filename)
         LOGGER.info("[f:%s] copied to %s", file_hash[:LOG_ID_LENGTH], destination)
