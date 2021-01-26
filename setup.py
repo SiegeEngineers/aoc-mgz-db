@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='mgzdb',
-    version='1.4.0',
+    version='1.4.1',
     description='Age of Empires II recorded game database.',
     url='https://github.com/siegeengineers/aoc-mgz-db/',
     license='MIT',
