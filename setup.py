@@ -13,7 +13,7 @@ setup(
     install_requires=[
         'aoeapi>=1.0.0',
         'coloredlogs==10.0',
-        'mgz>=1.4.8',
+        'mgz>=1.4.15',
         'psycopg2-binary==2.8.4',
         'python-aoc-qq>=1.0.4',
         'rarfile==3.1',
