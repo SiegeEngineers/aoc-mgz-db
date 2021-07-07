@@ -75,7 +75,7 @@ class API: # pylint: disable=too-many-instance-attributes
                 ladder=match.get('ladder'),
                 user_data=match['players']
             )
-            if single_pov:
+            if single_pov or len(players) > 2:
                 break
 
     def add_series(self, archive_path, series=None, series_id=None):
